@@ -26,6 +26,9 @@ class CompanyRead(BaseModel):
   default_currency: str | None = None
   default_vat_rate: float | None = None
   default_vat_country: str | None = None
+  company_registration_number: str | None = None
+  company_registration_country: str | None = None
+  cipc_document_url: str | None = None
 
 
 class CompanyUpdate(BaseModel):
@@ -41,6 +44,9 @@ class CompanyUpdate(BaseModel):
   default_currency: str | None = None
   default_vat_rate: float | None = None
   default_vat_country: str | None = None
+  company_registration_number: str | None = None
+  company_registration_country: str | None = None
+  cipc_document_url: str | None = None
 
 
 class CompanyUserRead(BaseModel):
@@ -92,6 +98,9 @@ def get_company(
     default_currency=getattr(tenant, "default_currency", None),
     default_vat_rate=getattr(tenant, "default_vat_rate", None),
     default_vat_country=getattr(tenant, "default_vat_country", None),
+    company_registration_number=getattr(tenant, "company_registration_number", None),
+    company_registration_country=getattr(tenant, "company_registration_country", None),
+    cipc_document_url=getattr(tenant, "cipc_document_url", None),
   )
 
 
@@ -129,6 +138,12 @@ def update_company(
     tenant.default_vat_rate = payload.default_vat_rate
   if payload.default_vat_country is not None:
     tenant.default_vat_country = payload.default_vat_country or None
+  if payload.company_registration_number is not None:
+    tenant.company_registration_number = payload.company_registration_number or None
+  if payload.company_registration_country is not None:
+    tenant.company_registration_country = payload.company_registration_country or None
+  if payload.cipc_document_url is not None:
+    tenant.cipc_document_url = payload.cipc_document_url or None
   db.add(tenant)
   db.commit()
   db.refresh(tenant)
@@ -145,6 +160,9 @@ def update_company(
     default_currency=getattr(tenant, "default_currency", None),
     default_vat_rate=getattr(tenant, "default_vat_rate", None),
     default_vat_country=getattr(tenant, "default_vat_country", None),
+    company_registration_number=getattr(tenant, "company_registration_number", None),
+    company_registration_country=getattr(tenant, "company_registration_country", None),
+    cipc_document_url=getattr(tenant, "cipc_document_url", None),
   )
 
 

@@ -2,6 +2,9 @@
 /dist
 /build
 /public
+.env
+.env.local
+.env.*.local
 /src
 /tailwind.config.cjs
 /vite.config.ts

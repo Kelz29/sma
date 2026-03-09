@@ -15,14 +15,16 @@ passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 pydantic = "^2.7.0"
 pydantic-settings = "^2.3.0"
 python-multipart = "^0.0.9"
-structlog = "^24.1.0"
-weasyprint = "^68.0"
-mysqlclient = {version = "^2.2.4", optional = true}
-openai = {version = "^1.0", optional = true}
+  structlog = "^24.1.0"
+  weasyprint = "^68.0"
+  redis = {version = "^5.0", optional = true}
+  mysqlclient = {version = "^2.2.4", optional = true}
+  openai = {version = "^1.0", optional = true}
 
 [tool.poetry.extras]
 mysql = ["mysqlclient"]
 receipt-ai = ["openai"]
+redis = ["redis"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.0"

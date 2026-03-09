@@ -21,6 +21,12 @@ class CustomerRead(CustomerBase):
     from_attributes = True
 
 
+class CustomerUpdate(BaseModel):
+  name: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  email: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  address: Optional[str] = None
+
+
 class AccountBase(BaseModel):
   code: constr(strip_whitespace=True, max_length=50)
   name: constr(strip_whitespace=True, max_length=255)
@@ -67,6 +73,31 @@ class InvoiceLineCreate(InvoiceLineBase):
 class InvoiceLineRead(InvoiceLineBase):
   id: int
   line_total: condecimal(max_digits=18, decimal_places=4)
+
+  class Config:
+    from_attributes = True
+
+
+class LineItemTemplateCreate(BaseModel):
+  description: constr(strip_whitespace=True, max_length=255)
+  default_quantity: condecimal(max_digits=18, decimal_places=4) = 1
+  unit_price: condecimal(max_digits=18, decimal_places=4) = 0
+  vat_rate: Optional[condecimal(max_digits=5, decimal_places=2)] = None
+
+
+class LineItemTemplateUpdate(BaseModel):
+  description: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  default_quantity: Optional[condecimal(max_digits=18, decimal_places=4)] = None
+  unit_price: Optional[condecimal(max_digits=18, decimal_places=4)] = None
+  vat_rate: Optional[condecimal(max_digits=5, decimal_places=2)] = None
+
+
+class LineItemTemplateRead(BaseModel):
+  id: int
+  description: str
+  default_quantity: condecimal(max_digits=18, decimal_places=4)
+  unit_price: condecimal(max_digits=18, decimal_places=4)
+  vat_rate: Optional[condecimal(max_digits=5, decimal_places=2)] = None
 
   class Config:
     from_attributes = True

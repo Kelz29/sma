@@ -29,16 +29,22 @@ def _banking_section(
   bank_account_number: str | None,
   bank_branch_code: str | None,
   primary_color: str | None = None,
+  company_name: str | None = None,
+  reference: int | None = None,
 ) -> str:
-  if not any((bank_name, bank_account_number, bank_branch_code)):
-    return ""
   parts = []
+  if company_name and company_name.strip():
+    parts.append(f"<div><strong>Name</strong> {company_name.strip()}</div>")
+  if reference is not None:
+    parts.append(f"<div><strong>Reference</strong> {reference}</div>")
   if bank_name:
     parts.append(f"<div><strong>Bank</strong> {bank_name}</div>")
   if bank_account_number:
     parts.append(f"<div><strong>Account number</strong> {bank_account_number}</div>")
   if bank_branch_code:
     parts.append(f"<div><strong>Branch code</strong> {bank_branch_code}</div>")
+  if not parts:
+    return ""
   border = f"border-left:4px solid {primary_color or '#059669'}"
   return f'<div style="margin-top:24px;padding:16px;background:#f8fafc;border-radius:8px;{border}"><p style="margin:0 0 8px;font-size:12px;color:#475569;text-transform:uppercase;font-weight:600">Payment details</p><div style="font-size:14px;line-height:1.8">{chr(10).join(parts)}</div></div>'
 
@@ -75,7 +81,10 @@ def build_invoice_html(
   logo_url = (company_logo_url or "").strip() or PLACEHOLDER_LOGO_SVG
   address = (company_address or "").strip()
   footer = (footer_text or "").strip() or "Thank you for your business. Payment is due within 30 days."
-  banking_html = _banking_section(bank_name, bank_account_number, bank_branch_code, primary_color)
+  banking_html = _banking_section(
+    bank_name, bank_account_number, bank_branch_code, primary_color,
+    company_name=company_name, reference=doc_number,
+  )
   prim = primary_color or "#333333"
   sec = secondary_color or "#059669"
   kwargs_common = dict(

@@ -50,7 +50,7 @@ def _calculate_totals(lines_data):
 @router.get("/", response_model=List[InvoiceRead])
 def list_invoices(
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "viewer"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "viewer", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   invoices = (
@@ -88,7 +88,7 @@ def preview_invoice_html(
   theme: Literal["classic", "modern", "minimal", "elegant", "bold", "professional"] = "classic",
   doctype: Literal["invoice", "quotation"] = "invoice",
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "viewer"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "viewer", "sales"])),
 ):
   """Return HTML preview of how an invoice/quotation looks with the given theme and doctype."""
   tenant_id = _get_tenant_id_or_400()
@@ -137,9 +137,15 @@ def preview_invoice_html(
 def create_invoice(
   payload: InvoiceCreate,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
+
+  if not payload.lines or len(payload.lines) == 0:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="At least one line item is required.",
+    )
 
   customer_name: str
   customer_email: str | None = None
@@ -243,7 +249,7 @@ def create_invoice(
 def get_invoice(
   invoice_id: int,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "viewer"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "viewer", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   invoice = (
@@ -274,7 +280,7 @@ def update_invoice(
   invoice_id: int,
   payload: InvoiceUpdate,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   invoice = (
@@ -389,6 +395,77 @@ def update_invoice(
   return invoice
 
 
+@router.post("/{invoice_id}/duplicate", response_model=InvoiceRead, status_code=status.HTTP_201_CREATED)
+def duplicate_invoice(
+  invoice_id: int,
+  db: Session = Depends(deps.get_db),
+  ctx=Depends(deps.require_role(["admin", "accountant", "sales"])),
+):
+  """Create a new draft invoice with the same customer, lines, and settings as the given invoice. Invoice number and issue/due dates are regenerated."""
+  tenant_id = _get_tenant_id_or_400()
+  invoice = (
+    db.query(Invoice)
+    .filter(Invoice.tenant_id == tenant_id, Invoice.id == invoice_id)
+    .first()
+  )
+  if not invoice:
+    raise HTTPException(status_code=404, detail="Invoice not found")
+
+  current_max = db.query(func.max(Invoice.invoice_number)).filter(Invoice.tenant_id == tenant_id).scalar()
+  doc_number = (current_max or 0) + 1
+
+  new_inv = Invoice(
+    uuid=str(uuid_mod.uuid4()),
+    tenant_id=tenant_id,
+    customer_id=invoice.customer_id,
+    invoice_number=doc_number,
+    customer_name=invoice.customer_name,
+    customer_email=invoice.customer_email,
+    issue_date=invoice.issue_date,
+    due_date=invoice.due_date,
+    currency=invoice.currency,
+    vat_rate=invoice.vat_rate,
+    vat_country=invoice.vat_country,
+    notes=invoice.notes,
+    status=InvoiceStatus.draft,
+    is_recurring=invoice.is_recurring,
+    recurring_interval_days=invoice.recurring_interval_days,
+    subtotal=invoice.subtotal,
+    vat_amount=invoice.vat_amount,
+    total=invoice.total,
+  )
+  db.add(new_inv)
+  db.flush()
+
+  for line in invoice.lines:
+    line_total = float(line.quantity) * float(line.unit_price)
+    new_line = InvoiceLine(
+      tenant_id=tenant_id,
+      invoice_id=new_inv.id,
+      description=line.description,
+      quantity=line.quantity,
+      unit_price=line.unit_price,
+      vat_rate=line.vat_rate,
+      line_total=line_total,
+    )
+    db.add(new_line)
+
+  log_audit(
+    db,
+    tenant_id=tenant_id,
+    user_id=ctx["user"].id,
+    action="duplicate_invoice",
+    entity_type="Invoice",
+    entity_id=str(new_inv.id),
+    details=f"Duplicated invoice {invoice.invoice_number} as {new_inv.invoice_number}",
+    new_values={"invoice_number": new_inv.invoice_number, "source_invoice_id": invoice.id},
+  )
+
+  db.commit()
+  db.refresh(new_inv)
+  return new_inv
+
+
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_invoice(
   invoice_id: int,
@@ -483,7 +560,7 @@ def view_invoice_html(
   theme: Literal["classic", "modern", "minimal", "elegant", "bold", "professional"] = "classic",
   doctype: Literal["invoice", "quotation"] = "invoice",
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "viewer"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "viewer", "sales"])),
 ):
   """Return HTML for the given invoice/quotation so it can be viewed in the browser without downloading PDF."""
   tenant_id = _get_tenant_id_or_400()
@@ -505,7 +582,7 @@ def download_invoice_pdf(
   theme: Literal["classic", "modern", "minimal", "elegant", "bold", "professional"] = "classic",
   doctype: Literal["invoice", "quotation"] = "invoice",
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "viewer"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "viewer", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   invoice = (
@@ -534,7 +611,7 @@ def email_invoice(
   invoice_id: int,
   payload: InvoiceEmailRequest,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant"])),
+  ctx=Depends(deps.require_role(["admin", "accountant", "sales"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   invoice = (

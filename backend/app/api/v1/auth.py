@@ -1,16 +1,21 @@
 import os
+import secrets
 import uuid
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.models.tenant import Tenant, TenantStatus
-from app.db.models.user import TenantUser, User
+from app.db.models.user import EmailVerificationToken, TenantUser, User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, MeResponse, MeUpdate, RegisterRequest, Token
+from app.utils.email_sender import send_welcome_email
 from app.utils.password import get_password_hash, verify_password
+from app.core.redis_client import cache_delete
+from app.utils.rate_limit import check_auth_rate_limit
 
 router = APIRouter(tags=["auth"])
 
@@ -18,8 +23,18 @@ ALLOWED_AVATAR_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 AVATAR_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 
 
+def _client_id(request: Request) -> str:
+  forwarded = request.headers.get("x-forwarded-for")
+  if forwarded:
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+  return request.client.host if request.client else "unknown"
+
+
 @router.post("/login", response_model=Token)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
+  err = check_auth_rate_limit(_client_id(request), is_login=True)
+  if err:
+    raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=err)
   tenant = db.query(Tenant).filter(Tenant.slug == data.tenant_slug).first()
   if not tenant:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tenant")
@@ -50,7 +65,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+def register(data: RegisterRequest, request: Request, db: Session = Depends(get_db)):
   """
   Register a new user and tenant (or join an existing tenant).
 
@@ -60,15 +75,26 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     them to the tenant (first user becomes `admin`, subsequent users default
     to `viewer`).
   """
-
+  err = check_auth_rate_limit(_client_id(request), is_login=False)
+  if err:
+    raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=err)
   tenant = db.query(Tenant).filter(Tenant.slug == data.tenant_slug).first()
   if not tenant:
+    # Enforce free-slot cap for new businesses
+    current_tenant_count = db.query(Tenant).count()
+    if current_tenant_count >= settings.FREE_BUSINESS_SLOTS:
+      raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Free business slots are full. Join the waitlist and we'll contact you when a spot opens.",
+      )
     tenant = Tenant(name=data.tenant_name, slug=data.tenant_slug)
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
+    cache_delete("landing:slots")  # invalidate landing cache so slots_left is fresh
 
   user = db.query(User).filter(User.email == data.email).first()
+  new_user_created = False
   if user:
     # If the user already exists and is already linked to this tenant, prevent duplicate registration.
     existing_link = (
@@ -82,6 +108,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         detail="User already registered for this tenant",
       )
   else:
+    new_user_created = True
     user = User(
       email=data.email,
       full_name=data.full_name,
@@ -110,12 +137,56 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
   db.add(tenant_link)
   db.commit()
 
+  # Welcome email (SmartSeen theme, "Powered by Smart Macmane"). New users get verification link.
+  verify_url = None
+  if new_user_created:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(days=7)
+    ev = EmailVerificationToken(user_id=user.id, token=token, expires_at=expires_at)
+    db.add(ev)
+    db.commit()
+    base_url = (getattr(settings, "APP_BASE_URL", None) or "").rstrip("/")
+    verify_url = f"{base_url}/verify-email?token={token}" if base_url else None
+  try:
+    send_welcome_email(
+      to_email=user.email,
+      full_name=user.full_name,
+      verify_url=verify_url,
+    )
+  except Exception:
+    pass  # Don't fail registration if email fails
+
   access_token = create_access_token(
     subject=str(user.id),
     tenant_id=tenant.id,
     role=role,
   )
   return Token(access_token=access_token)
+
+
+@router.get("/verify-email")
+def verify_email(token: str = Query(..., alias="token"), db: Session = Depends(get_db)):
+  """
+  Verify a user's email using the token sent in the welcome email.
+  Marks the user as email_verified and invalidates the token.
+  """
+  ev = db.query(EmailVerificationToken).filter(EmailVerificationToken.token == token).first()
+  if not ev:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
+  if ev.expires_at < datetime.utcnow():
+    db.delete(ev)
+    db.commit()
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link has expired")
+  user = db.query(User).filter(User.id == ev.user_id).first()
+  if not user:
+    db.delete(ev)
+    db.commit()
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification link")
+  user.email_verified = True
+  db.add(user)
+  db.delete(ev)
+  db.commit()
+  return {"detail": "Email verified successfully"}
 
 
 @router.get("/me", response_model=MeResponse)

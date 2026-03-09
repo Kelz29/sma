@@ -47,7 +47,7 @@ def _payslip_read(p: Payslip, employee_name: str | None = None) -> PayslipRead:
 def list_payslips(
   employee_id: int | None = None,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "hr", "employee"])),
+  ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   if ctx["tenant_user"].role == "employee":
@@ -73,7 +73,7 @@ def list_payslips(
 def get_payslip(
   payslip_id: int,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "hr", "employee"])),
+  ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   role = ctx["tenant_user"].role
@@ -100,7 +100,7 @@ def get_payslip(
 def generate_payslip(
   payload: PayslipGenerate,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "hr"])),
+  ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   emp = (
@@ -160,7 +160,7 @@ def generate_payslip(
 def get_payslip_pdf(
   payslip_id: int,
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "accountant", "hr", "employee"])),
+  ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   role = ctx["tenant_user"].role

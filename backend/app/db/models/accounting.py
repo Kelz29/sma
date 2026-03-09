@@ -138,6 +138,24 @@ class InvoiceLine(Base):
   invoice: Mapped["Invoice"] = relationship(back_populates="lines")
 
 
+class LineItemTemplate(Base):
+  """Reusable line item (product/service) for invoices. Tenant-scoped."""
+  __tablename__ = "line_item_templates"
+
+  id: Mapped[int] = mapped_column(primary_key=True)
+  tenant_id: Mapped[int] = mapped_column(index=True)
+
+  description: Mapped[str] = mapped_column(String(255), nullable=False)
+  default_quantity: Mapped[float] = mapped_column(Numeric(18, 4), default=1)
+  unit_price: Mapped[float] = mapped_column(Numeric(18, 4), default=0)
+  vat_rate: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+
+  created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+  updated_at: Mapped[datetime] = mapped_column(
+    DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+  )
+
+
 class AuditLog(Base):
   __tablename__ = "audit_logs"
 

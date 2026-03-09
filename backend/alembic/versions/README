@@ -1,0 +1,4 @@
+# Alembic migration versions
+# Generate: alembic revision --autogenerate -m "description"
+# Apply:    alembic upgrade head
+# For existing DB (no new migration): alembic stamp head

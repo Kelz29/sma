@@ -31,6 +31,10 @@ class Tenant(Base):
   default_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)  # e.g. ZAR, USD
   default_vat_rate: Mapped[float | None] = mapped_column(Float, nullable=True)  # e.g. 15.0
   default_vat_country: Mapped[str | None] = mapped_column(String(2), nullable=True)  # e.g. ZA
+  # Company registration (e.g. CIPC)
+  company_registration_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+  company_registration_country: Mapped[str | None] = mapped_column(String(2), nullable=True)  # e.g. ZA
+  cipc_document_url: Mapped[str | None] = mapped_column(String(512), nullable=True)  # URL to CIPC registration document
 
   users: Mapped[list["TenantUser"]] = relationship(back_populates="tenant")
 

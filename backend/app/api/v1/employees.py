@@ -54,7 +54,7 @@ def _employee_read(emp: Employee) -> EmployeeRead:
 @router.get("/", response_model=list[EmployeeRead])
 def list_employees(
   db: Session = Depends(deps.get_db),
-  ctx=Depends(deps.require_role(["admin", "hr"])),
+  ctx=Depends(deps.require_role(["admin", "hr", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
   employees = (
