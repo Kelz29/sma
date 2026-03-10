@@ -58,11 +58,13 @@ def startup_validate_config() -> None:
   _validate_production_config()
 
 # CORS: in production set CORS_ORIGINS to a comma-separated list of allowed origins (e.g. https://app.example.com).
-_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] if settings.CORS_ORIGINS != "*" else ["*"]
+use_wildcard = settings.CORS_ORIGINS == "*"
+_origins = ["*"] if use_wildcard else [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
   CORSMiddleware,
   allow_origins=_origins,
-  allow_credentials=True,
+  allow_credentials=not use_wildcard,  # Disable credentials when using wildcard
   allow_methods=["*"],
   allow_headers=["*"],
 )
