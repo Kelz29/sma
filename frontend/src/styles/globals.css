@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apple design system: SF Pro on Apple devices via system font stack */
+:root {
+  --brand-primary: #059669;
+  --brand-primary-hover: #047857;
+  --brand-secondary: #047857;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", system-ui, sans-serif;
+  /* Light theme – soft, minimal blocking */
+  --bg-page: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --text-primary: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --border-muted: #f1f5f9;
+}
+
+.dark {
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
+  --bg-sidebar: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --border-muted: #1e293b;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  @apply min-h-screen antialiased;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apple HIG–style focus rings; brand primary works in both themes */
+*:focus-visible {
+  @apply outline-none ring-2 ring-brand-primary ring-offset-2;
+}
+
