@@ -4,7 +4,7 @@ All endpoints require role=employee and operate on the current employee only.
 """
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -261,6 +261,7 @@ def get_my_payslips(
 @router.get("/payslips/{payslip_id}/pdf")
 def get_my_payslip_pdf(
   payslip_id: int,
+  theme: str = Query("classic", description="PDF layout: classic, modern, or minimal"),
   db: Session = Depends(deps.get_db),
   employee: Employee = Depends(deps.get_current_employee),
 ):
@@ -283,8 +284,11 @@ def get_my_payslip_pdf(
   tenant = db.query(Tenant).filter(Tenant.id == employee.tenant_id).first()
   company_name = tenant.name if tenant else "Company"
   company_address = getattr(tenant, "address", None) or None
+  company_registration_number = getattr(tenant, "company_registration_number", None) or None
+  company_logo_url = getattr(tenant, "logo_url", None) if tenant else None
   html = build_payslip_html(
     company_name=company_name,
+    company_registration_number=company_registration_number,
     employee_name=f"{employee.first_name} {employee.last_name}".strip(),
     employee_number=employee.employee_number,
     period_start=p.period_start,
@@ -297,6 +301,8 @@ def get_my_payslip_pdf(
     currency=p.currency or "ZAR",
     line_items=p.line_items if isinstance(p.line_items, list) else None,
     company_address=company_address,
+    company_logo_url=company_logo_url,
+    theme=theme,
   )
   pdf_bytes = render_invoice_pdf(html_body=html)
   return StreamingResponse(

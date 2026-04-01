@@ -6,7 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.staticfiles import StaticFiles
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.logging_config import configure_logging
 
 configure_logging()
@@ -29,11 +29,6 @@ from app.api.v1 import payslips as payslips_router
 from app.api.v1 import portal as portal_router
 from app.api.v1 import reports as reports_router
 from app.api.v1 import sales as sales_router
-from app.api.v1 import employees as employees_router
-from app.api.v1 import leave as leave_router
-from app.api.v1 import attendance as attendance_router
-from app.api.v1 import payslips as payslips_router
-from app.api.v1 import portal as portal_router
 from app.middleware.monitoring import MonitoringMiddleware
 from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -59,6 +54,16 @@ def startup_validate_config() -> None:
 
 # CORS: in production set CORS_ORIGINS to a comma-separated list of allowed origins (e.g. https://app.example.com).
 _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] if settings.CORS_ORIGINS != "*" else ["*"]
+if not _origins:
+  # Misconfigured env (e.g. CORS_ORIGINS=,) would send no ACAO header; fall back to model defaults.
+  _default = Settings.model_fields["CORS_ORIGINS"].default
+  _origins = [o.strip() for o in str(_default).split(",") if o.strip()]
+app.add_middleware(MonitoringMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+# Capture request-scoped context (e.g. IP) early
+app.add_middleware(RequestContextMiddleware)
+app.add_middleware(TenantContextMiddleware)
+# Last registered = outermost = runs first on the request (handles preflight before other middleware).
 app.add_middleware(
   CORSMiddleware,
   allow_origins=_origins,
@@ -66,11 +71,6 @@ app.add_middleware(
   allow_methods=["*"],
   allow_headers=["*"],
 )
-app.add_middleware(MonitoringMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-# Capture request-scoped context (e.g. IP) early
-app.add_middleware(RequestContextMiddleware)
-app.add_middleware(TenantContextMiddleware)
 
 app.include_router(auth_router.router, prefix=f"{settings.API_V1_STR}/auth")
 app.include_router(public_router.router, prefix=settings.API_V1_STR)
@@ -95,6 +95,25 @@ os.makedirs(os.path.join(settings.UPLOAD_DIR, "avatars"), exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
+def _cors_headers_for_request(request: Request) -> dict[str, str]:
+  """So browser-visible 500s still expose ACAO when credentialed XHR is used."""
+  origin = request.headers.get("origin")
+  if not origin:
+    return {}
+  if settings.CORS_ORIGINS == "*":
+    return {}
+  allowed = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+  if not allowed:
+    _default = Settings.model_fields["CORS_ORIGINS"].default
+    allowed = [o.strip() for o in str(_default).split(",") if o.strip()]
+  if origin not in allowed:
+    return {}
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+  }
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
   """Prevent internal errors from leaking to clients; log server-side. HTTPException is handled by FastAPI."""
@@ -112,6 +131,7 @@ async def global_exception_handler(request: Request, exc: Exception):
   return JSONResponse(
     status_code=500,
     content={"detail": "An internal error occurred. Please try again later."},
+    headers=_cors_headers_for_request(request),
   )
 
 

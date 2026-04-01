@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { formatAmount } from "@/lib/currency";
+import { PAYSLIP_PDF_THEMES, type PayslipPdfTheme } from "@/lib/payslipPdfThemes";
 
 interface Employee {
   id: number;
@@ -29,6 +30,7 @@ interface PayslipRow {
 export function PayslipsPage() {
   const queryClient = useQueryClient();
   const [generatePayslipOpen, setGeneratePayslipOpen] = useState(false);
+  const [pdfTheme, setPdfTheme] = useState<PayslipPdfTheme>("classic");
 
   const { data: employees } = useQuery<Employee[]>({
     queryKey: ["employees"],
@@ -58,11 +60,14 @@ export function PayslipsPage() {
   });
 
   const downloadPayslipPdf = async (payslipId: number) => {
-    const res = await api.get(`/payslips/${payslipId}/pdf`, { responseType: "blob" });
+    const res = await api.get(`/payslips/${payslipId}/pdf`, {
+      params: { theme: pdfTheme },
+      responseType: "blob",
+    });
     const url = URL.createObjectURL(res.data as Blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `payslip-${payslipId}.pdf`;
+    a.download = `payslip-${payslipId}-${pdfTheme}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -72,8 +77,29 @@ export function PayslipsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Payslips</h1>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Generate and download payslips by employee and period.
+          Generate and download payslips by employee and period. Choose a PDF layout before downloading.
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-800/40 px-4 py-3 text-sm">
+        <label htmlFor="payslip-pdf-theme" className="font-medium text-slate-700 dark:text-slate-300">
+          PDF design
+        </label>
+        <select
+          id="payslip-pdf-theme"
+          value={pdfTheme}
+          onChange={(e) => setPdfTheme(e.target.value as PayslipPdfTheme)}
+          className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+        >
+          {PAYSLIP_PDF_THEMES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-slate-500 dark:text-slate-400 text-xs">
+          Classic: soft card · Modern: gradient header · Minimal: black &amp; white
+        </span>
       </div>
 
       <div className="space-y-3">

@@ -210,6 +210,8 @@ class PayslipGenerate(BaseModel):
   period_end: date
   gross: Optional[condecimal(max_digits=14, decimal_places=2)] = None
   age_group: Optional[str] = "under65"
+  hours_worked_per_month: Optional[condecimal(max_digits=8, decimal_places=2)] = None
+  uif_exempt: bool = False
 
 
 class PayslipRead(BaseModel):

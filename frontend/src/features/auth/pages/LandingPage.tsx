@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
+import { SmartSeenMark } from "@/components/SmartSeenMark";
 
 /** Free stock video: accounters analyzing business documents (Mixkit, accounting/finance). */
 const BACKGROUND_VIDEO_URL = "https://assets.mixkit.co/videos/48976/48976-720.mp4";
@@ -43,8 +44,8 @@ function PromoModal({
       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" aria-hidden onClick={onClose} />
       <div className="relative w-full max-w-md rounded-2xl border border-emerald-500/30 bg-slate-900 shadow-2xl ring-1 ring-white/10">
         <div className="p-6 sm:p-8">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20 text-2xl font-bold text-emerald-400 ring-1 ring-emerald-500/40">
-            S
+          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-lime-300 ring-1 ring-lime-300/60">
+            <SmartSeenMark className="h-8 w-8" />
           </div>
           <h2 id="promo-title" className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
             Free SmartSeen for the first {totalSlots} businesses
@@ -204,8 +205,8 @@ export function LandingPage() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40">
-              <span className="text-lg font-semibold">S</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-lime-300 ring-1 ring-lime-300/60">
+              <SmartSeenMark className="h-6 w-6" />
             </span>
             <span className="text-lg font-semibold tracking-tight">SmartSeen</span>
           </div>

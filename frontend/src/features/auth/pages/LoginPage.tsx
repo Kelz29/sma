@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/axios";
 import { useAuthStore } from "@/store/authStore";
+import { SmartSeenMark } from "@/components/SmartSeenMark";
 
 /** Same as landing page: accounting-related background video (Mixkit). */
 const BACKGROUND_VIDEO_URL = "https://assets.mixkit.co/videos/48976/48976-720.mp4";
@@ -108,8 +109,8 @@ export function LoginPage() {
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
           <Link to="/" className="flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40">
-              <span className="text-lg font-semibold">S</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950 text-lime-300 ring-1 ring-lime-300/60">
+              <SmartSeenMark className="h-6 w-6" />
             </span>
             <span className="text-lg font-semibold tracking-tight">SmartSeen</span>
           </Link>

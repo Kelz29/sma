@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Start SmartSeen backend on port 8083.
-# Usage: ./run.sh   or   bash run.sh
+# Start SmartSeen backend (default port 8000 — matches frontend VITE_API_URL).
+# Usage: ./run.sh   or   PORT=8083 bash run.sh
 set -e
 cd "$(dirname "$0")"
-PORT="${PORT:-8083}"
+PORT="${PORT:-8000}"
 
 if command -v poetry &>/dev/null; then
   poetry run uvicorn app.main:app --reload --port "$PORT"
@@ -23,6 +23,6 @@ echo "  cd $(pwd)"
 echo "  poetry install"
 echo "  poetry run uvicorn app.main:app --reload --port $PORT"
 echo ""
-echo "Or with pip: pip install uvicorn fastapi sqlalchemy pydantic pydantic-settings python-jose passlib pydantic-settings"
+echo "Or with pip: pip install uvicorn[standard] fastapi sqlalchemy pydantic pydantic-settings python-jose \"passlib[bcrypt]\" python-multipart"
 echo "  python3 -m uvicorn app.main:app --reload --port $PORT"
 exit 1
