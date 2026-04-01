@@ -71,6 +71,16 @@ if getattr(settings, "USE_SQLITE", False):
       conn.commit()
     except Exception:
       conn.rollback()
+    for col, typ in [
+      ("address", "TEXT"),
+      ("phone", "VARCHAR(50)"),
+      ("passport_number", "VARCHAR(50)"),
+    ]:
+      try:
+        conn.execute(text(f"ALTER TABLE employees ADD COLUMN {col} {typ}"))
+        conn.commit()
+      except Exception:
+        conn.rollback()
 else:
   # MySQL (or other DB): ensure optional columns and feature_flags, waitlist, email_verification tables exist
   with engine.connect() as conn:

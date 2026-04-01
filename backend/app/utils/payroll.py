@@ -1,7 +1,9 @@
 """
-South African PAYE and UIF calculations (simplified).
+South African PAYE and UIF calculations.
 PAYE: 2025/2026 tax year brackets and rebates; monthly from annual equivalent.
-UIF: 1% employee + 1% employer on gross, capped at remuneration ceiling.
+UIF: 1% employee + 1% employer on remuneration, capped at remuneration ceiling.
+UIF applies only to contributing employees (for example, not exempt employees and
+not employees working 24 hours or less in a month).
 """
 from decimal import Decimal
 from typing import Literal
@@ -26,6 +28,7 @@ PAYE_THRESHOLD_UNDER_65 = Decimal("95750")
 # UIF: 1% each side; ceiling on monthly remuneration (ZAR). Max UIF = ceiling * 0.01 per side.
 UIF_RATE = Decimal("0.01")
 UIF_CEILING_MONTHLY = Decimal("17712")
+UIF_MIN_HOURS_PER_MONTH = Decimal("24")
 
 
 def annual_tax(annual_income: Decimal, age_group: Literal["under65", "65-74", "75+"] = "under65") -> Decimal:
@@ -61,24 +64,64 @@ def monthly_paye(gross_monthly: Decimal, age_group: Literal["under65", "65-74", 
   return (annual_tax(annual, age_group) / 12).quantize(Decimal("0.01"))
 
 
-def uif_employee(gross_monthly: Decimal) -> Decimal:
-  """UIF employee contribution: 1% of gross, capped at UIF_CEILING_MONTHLY."""
+def is_uif_applicable(
+  *,
+  hours_worked_per_month: Decimal | None = None,
+  uif_exempt: bool = False,
+) -> bool:
+  """Whether UIF contributions should be calculated for this employee."""
+  if uif_exempt:
+    return False
+  if hours_worked_per_month is not None and hours_worked_per_month <= UIF_MIN_HOURS_PER_MONTH:
+    return False
+  return True
+
+
+def uif_employee(
+  gross_monthly: Decimal,
+  *,
+  hours_worked_per_month: Decimal | None = None,
+  uif_exempt: bool = False,
+) -> Decimal:
+  """UIF employee contribution: 1% of remuneration, capped at UIF_CEILING_MONTHLY."""
+  if not is_uif_applicable(hours_worked_per_month=hours_worked_per_month, uif_exempt=uif_exempt):
+    return Decimal("0.00")
   base = min(gross_monthly, UIF_CEILING_MONTHLY)
   return (base * UIF_RATE).quantize(Decimal("0.01"))
 
 
-def uif_employer(gross_monthly: Decimal) -> Decimal:
-  """UIF employer contribution: 1% of gross, capped at UIF_CEILING_MONTHLY."""
-  return uif_employee(gross_monthly)
+def uif_employer(
+  gross_monthly: Decimal,
+  *,
+  hours_worked_per_month: Decimal | None = None,
+  uif_exempt: bool = False,
+) -> Decimal:
+  """UIF employer contribution: 1% of remuneration, capped at UIF_CEILING_MONTHLY."""
+  return uif_employee(
+    gross_monthly,
+    hours_worked_per_month=hours_worked_per_month,
+    uif_exempt=uif_exempt,
+  )
 
 
 def net_after_paye_uif(
   gross_monthly: Decimal,
   age_group: Literal["under65", "65-74", "75+"] = "under65",
+  *,
+  hours_worked_per_month: Decimal | None = None,
+  uif_exempt: bool = False,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
   """Returns (paye, uif_emp, uif_emplr, net)."""
   paye = monthly_paye(gross_monthly, age_group)
-  uif_emp = uif_employee(gross_monthly)
-  uif_emplr = uif_employer(gross_monthly)
+  uif_emp = uif_employee(
+    gross_monthly,
+    hours_worked_per_month=hours_worked_per_month,
+    uif_exempt=uif_exempt,
+  )
+  uif_emplr = uif_employer(
+    gross_monthly,
+    hours_worked_per_month=hours_worked_per_month,
+    uif_exempt=uif_exempt,
+  )
   net = gross_monthly - paye - uif_emp
   return (paye, uif_emp, uif_emplr, net)

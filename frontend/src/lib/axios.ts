@@ -2,8 +2,8 @@ import axios from "axios";
 import { useAuthStore } from "@/store/authStore";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8083/api/v1",
-  withCredentials: false, // Disabled for wildcard CORS
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1",
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
