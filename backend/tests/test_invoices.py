@@ -76,3 +76,22 @@ def test_invoices_create_validation_fails(client: TestClient, auth_headers: dict
     headers=auth_headers,
   )
   assert r.status_code == 422
+
+
+def test_invoices_discount_percent(client: TestClient, auth_headers: dict) -> None:
+  payload = {
+    "customer_name": "Discount Co",
+    "issue_date": "2025-03-01",
+    "currency": "ZAR",
+    "discount_type": "percent",
+    "discount_value": 10,
+    "lines": [{"description": "Service", "quantity": 1, "unit_price": 1000, "vat_rate": 15}],
+  }
+  r = client.post("/api/v1/invoices/", json=payload, headers=auth_headers)
+  assert r.status_code == 201
+  data = r.json()
+  assert float(data["subtotal"]) == 1000.0
+  assert float(data["discount_amount"]) == 100.0
+  assert float(data["discount_percent"]) == 10.0
+  assert abs(float(data["vat_amount"]) - 135.0) < 0.01
+  assert abs(float(data["total"]) - 1035.0) < 0.01

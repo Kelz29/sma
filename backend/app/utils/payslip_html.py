@@ -241,6 +241,8 @@ def _payslip_body(
   address: str,
   theme: PayslipTheme,
   company_logo_url: str | None,
+  ytd_tax: Decimal,
+  ytd_earnings: Decimal,
 ) -> str:
   company_meta_parts = []
   if address:
@@ -255,9 +257,12 @@ def _payslip_body(
   if logo_src:
     safe_src = html_module.escape(logo_src, quote=True)
     logo_html = f'<div class="ps-logo-wrap"><img class="ps-logo" src="{safe_src}" alt="" /></div>'
+  # Template already prints Gross / PAYE / UIF; skip those if stored as line_items.
+  _core_labels = {"gross pay", "paye", "uif (employee)", "uif employee"}
   extra_rows = "".join(
     f'<tr><td class="ps-row-muted">{li.get("label", "Item")}</td><td class="ps-amount">{_fmt_num(li.get("amount"))}</td></tr>'
     for li in lines
+    if str(li.get("label", "")).strip().lower() not in _core_labels
   )
 
   inner_block = f"""
@@ -349,21 +354,40 @@ def _payslip_body(
         </div>
         <div>
           <div class="ps-totals-card">
+            <div class="ps-label-sm">Earning</div>
             <div class="ps-totals-row">
-              <span class="ps-totals-label">Gross earnings</span>
+              <span class="ps-totals-label">Gross</span>
               <span class="ps-totals-val">{_fmt_num(gross)}</span>
             </div>
+
+            <div class="ps-totals-divider"></div>
+            <div class="ps-label-sm">Deduction</div>
             <div class="ps-totals-row">
-              <span class="ps-totals-label">Total deductions</span>
-              <span class="ps-totals-val neg">({_fmt_num(paye + uif_employee)})</span>
+              <span class="ps-totals-label">UIF (employee)</span>
+              <span class="ps-totals-val neg">({_fmt_num(uif_employee)})</span>
             </div>
+
+            <div class="ps-totals-divider"></div>
+            <div class="ps-label-sm">Company contribution</div>
+            <div class="ps-totals-row">
+              <span class="ps-totals-label">UIF (employer)</span>
+              <span class="ps-totals-val">{_fmt_num(uif_employer)}</span>
+            </div>
+
+            <div class="ps-totals-divider"></div>
+            <div class="ps-label-sm">Year to date</div>
+            <div class="ps-totals-row">
+              <span class="ps-totals-label">Tax</span>
+              <span class="ps-totals-val">{_fmt_num(ytd_tax)}</span>
+            </div>
+            <div class="ps-totals-row">
+              <span class="ps-totals-label">Total earnings</span>
+              <span class="ps-totals-val">{_fmt_num(ytd_earnings)}</span>
+            </div>
+
             <div class="ps-totals-row ps-totals-divider">
               <span class="ps-totals-label">Net pay</span>
               <span class="ps-totals-val">{_fmt_num(net)}</span>
-            </div>
-            <div class="ps-totals-row ps-totals-uif">
-              <span class="ps-totals-label">UIF (employer)</span>
-              <span class="ps-totals-val">{_fmt_num(uif_employer)}</span>
             </div>
           </div>
         </div>
@@ -396,12 +420,16 @@ def build_payslip_html(
   company_address: str | None = None,
   company_logo_url: str | None = None,
   theme: str = "classic",
+  ytd_tax: Decimal | float | None = None,
+  ytd_earnings: Decimal | float | None = None,
 ) -> str:
   """Render payslip HTML. ``theme``: classic | modern | minimal."""
   th = _normalize_theme(theme)
   lines = line_items or []
   address = (company_address or "").strip()
   css = _theme_styles(th)
+  ytd_tax_val = Decimal(str(ytd_tax if ytd_tax is not None else paye))
+  ytd_earn_val = Decimal(str(ytd_earnings if ytd_earnings is not None else gross))
   body = _payslip_body(
     company_name=company_name,
     company_registration_number=company_registration_number,
@@ -419,6 +447,8 @@ def build_payslip_html(
     address=address,
     theme=th,
     company_logo_url=company_logo_url,
+    ytd_tax=ytd_tax_val,
+    ytd_earnings=ytd_earn_val,
   )
   return f"""<!DOCTYPE html>
 <html>

@@ -1,13 +1,23 @@
-from datetime import date
-from typing import List, Optional
+from datetime import date, datetime
+from decimal import Decimal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, condecimal, constr
 
+CustomerType = Literal["individual", "company"]
+DiscountType = Literal["percent", "amount"]
+
 
 class CustomerBase(BaseModel):
+  customer_type: CustomerType = "company"
   name: constr(strip_whitespace=True, max_length=255)
   email: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  phone: Optional[constr(strip_whitespace=True, max_length=50)] = None
   address: Optional[str] = None
+  contact_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  registration_number: Optional[constr(strip_whitespace=True, max_length=100)] = None
+  vat_number: Optional[constr(strip_whitespace=True, max_length=50)] = None
+  id_number: Optional[constr(strip_whitespace=True, max_length=50)] = None
 
 
 class CustomerCreate(CustomerBase):
@@ -22,9 +32,15 @@ class CustomerRead(CustomerBase):
 
 
 class CustomerUpdate(BaseModel):
+  customer_type: Optional[CustomerType] = None
   name: Optional[constr(strip_whitespace=True, max_length=255)] = None
   email: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  phone: Optional[constr(strip_whitespace=True, max_length=50)] = None
   address: Optional[str] = None
+  contact_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  registration_number: Optional[constr(strip_whitespace=True, max_length=100)] = None
+  vat_number: Optional[constr(strip_whitespace=True, max_length=50)] = None
+  id_number: Optional[constr(strip_whitespace=True, max_length=50)] = None
 
 
 class AccountBase(BaseModel):
@@ -130,6 +146,9 @@ class InvoiceCreate(BaseModel):
   notes: Optional[str] = None
   is_recurring: bool = False
   recurring_interval_days: Optional[int] = None
+  # percent | amount — discount applied to subtotal before VAT
+  discount_type: Optional[Literal["percent", "amount"]] = None
+  discount_value: Optional[condecimal(max_digits=18, decimal_places=4)] = None
   lines: List[InvoiceLineCreate]
 
 
@@ -145,7 +164,34 @@ class InvoiceUpdate(BaseModel):
   status: Optional[str] = None
   is_recurring: Optional[bool] = None
   recurring_interval_days: Optional[int] = None
+  discount_type: Optional[Literal["percent", "amount"]] = None
+  discount_value: Optional[condecimal(max_digits=18, decimal_places=4)] = None
+  clear_discount: bool = False
   lines: Optional[List[InvoiceLineCreate]] = None
+
+
+class InvoicePaymentCreate(BaseModel):
+  amount: condecimal(max_digits=18, decimal_places=4)
+  payment_date: date
+  method: Optional[constr(strip_whitespace=True, max_length=50)] = None
+  reference: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  notes: Optional[str] = None
+  bank_transaction_id: Optional[int] = None
+
+
+class InvoicePaymentRead(BaseModel):
+  id: int
+  invoice_id: int
+  amount: condecimal(max_digits=18, decimal_places=4)
+  payment_date: date
+  method: Optional[str] = None
+  reference: Optional[str] = None
+  notes: Optional[str] = None
+  bank_transaction_id: Optional[int] = None
+  created_at: datetime
+
+  class Config:
+    from_attributes = True
 
 
 class InvoiceRead(InvoiceBase):
@@ -154,10 +200,16 @@ class InvoiceRead(InvoiceBase):
   invoice_number: int
   customer_id: Optional[int] = None
   subtotal: condecimal(max_digits=18, decimal_places=4)
+  discount_type: Optional[str] = None
+  discount_percent: Optional[condecimal(max_digits=5, decimal_places=2)] = None
+  discount_amount: condecimal(max_digits=18, decimal_places=4) = Decimal("0")
   vat_amount: condecimal(max_digits=18, decimal_places=4)
   total: condecimal(max_digits=18, decimal_places=4)
+  amount_paid: condecimal(max_digits=18, decimal_places=4) = Decimal("0")
+  balance_due: condecimal(max_digits=18, decimal_places=4) = Decimal("0")
   status: str
   lines: List[InvoiceLineRead]
+  payments: List[InvoicePaymentRead] = []
 
   class Config:
     from_attributes = True

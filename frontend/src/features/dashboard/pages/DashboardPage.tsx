@@ -11,6 +11,8 @@ interface InvoiceSummary {
   customer_name: string;
   issue_date: string;
   total: number;
+  amount_paid?: number;
+  balance_due?: number;
   currency: string;
   status: string;
 }
@@ -102,7 +104,7 @@ export function DashboardPage() {
         monthRev += total;
       }
       if (inv?.status !== "paid" && inv?.status !== "cancelled") {
-        outstanding += total;
+        outstanding += Number(inv?.balance_due ?? Math.max(0, total - Number(inv?.amount_paid ?? 0)));
       }
     });
 

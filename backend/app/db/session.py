@@ -81,6 +81,34 @@ if getattr(settings, "USE_SQLITE", False):
         conn.commit()
       except Exception:
         conn.rollback()
+    for col, typ in [
+      ("customer_type", "VARCHAR(20) DEFAULT 'company'"),
+      ("phone", "VARCHAR(50)"),
+      ("contact_name", "VARCHAR(255)"),
+      ("registration_number", "VARCHAR(100)"),
+      ("vat_number", "VARCHAR(50)"),
+      ("id_number", "VARCHAR(50)"),
+    ]:
+      try:
+        conn.execute(text(f"ALTER TABLE customers ADD COLUMN {col} {typ}"))
+        conn.commit()
+      except Exception:
+        conn.rollback()
+    try:
+      conn.execute(text("UPDATE customers SET customer_type = 'company' WHERE customer_type IS NULL OR customer_type = ''"))
+      conn.commit()
+    except Exception:
+      conn.rollback()
+    for col, typ in [
+      ("discount_type", "VARCHAR(20)"),
+      ("discount_percent", "REAL"),
+      ("discount_amount", "REAL DEFAULT 0"),
+    ]:
+      try:
+        conn.execute(text(f"ALTER TABLE invoices ADD COLUMN {col} {typ}"))
+        conn.commit()
+      except Exception:
+        conn.rollback()
 else:
   # MySQL (or other DB): ensure optional columns and feature_flags, waitlist, email_verification tables exist
   with engine.connect() as conn:
@@ -137,6 +165,15 @@ else:
       "ALTER TABLE tenants ADD COLUMN company_registration_country VARCHAR(2) NULL",
       "ALTER TABLE tenants ADD COLUMN cipc_document_url VARCHAR(512) NULL",
       "ALTER TABLE invoices ADD COLUMN uuid VARCHAR(36) NULL",
+      "ALTER TABLE customers ADD COLUMN customer_type VARCHAR(20) NULL DEFAULT 'company'",
+      "ALTER TABLE customers ADD COLUMN phone VARCHAR(50) NULL",
+      "ALTER TABLE customers ADD COLUMN contact_name VARCHAR(255) NULL",
+      "ALTER TABLE customers ADD COLUMN registration_number VARCHAR(100) NULL",
+      "ALTER TABLE customers ADD COLUMN vat_number VARCHAR(50) NULL",
+      "ALTER TABLE customers ADD COLUMN id_number VARCHAR(50) NULL",
+      "ALTER TABLE invoices ADD COLUMN discount_type VARCHAR(20) NULL",
+      "ALTER TABLE invoices ADD COLUMN discount_percent DOUBLE NULL",
+      "ALTER TABLE invoices ADD COLUMN discount_amount DOUBLE NULL DEFAULT 0",
     ]:
       try:
         conn.execute(text(stmt))

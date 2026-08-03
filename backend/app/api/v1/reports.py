@@ -6,10 +6,10 @@ import csv
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api import deps
-from app.db.models.accounting import Expense, Invoice
+from app.db.models.accounting import Expense, Invoice, InvoiceStatus
 from app.middleware.tenant_context import get_current_tenant_id
 from app.schemas.reports import (
   AgingBucket,
@@ -20,6 +20,7 @@ from app.schemas.reports import (
   SummaryReport,
 )
 from app.utils.email_sender import send_report_email
+from app.utils.invoice_payments import invoice_balance_due
 
 router = APIRouter(tags=["reports"])
 
@@ -72,6 +73,7 @@ def summary_report(
 
   invoices = (
     db.query(Invoice)
+    .options(joinedload(Invoice.payments))
     .filter(
       Invoice.tenant_id == tenant_id,
       Invoice.issue_date >= d_from,
@@ -118,8 +120,11 @@ def summary_report(
   outstanding_total = 0.0
   outstanding_count = 0
   for inv in invoices:
-    if inv.status not in ("paid", "cancelled"):
-      outstanding_total += float(inv.total or 0)
+    if inv.status == InvoiceStatus.cancelled:
+      continue
+    balance = float(invoice_balance_due(inv))
+    if balance > 0.01:
+      outstanding_total += balance
       outstanding_count += 1
 
   avg_invoice = total_revenue / len(invoices) if invoices else 0.0
@@ -188,6 +193,7 @@ def aging_report(
 
   invoices = (
     db.query(Invoice)
+    .options(joinedload(Invoice.payments))
     .filter(Invoice.tenant_id == tenant_id)
     .all()
   )
@@ -202,11 +208,13 @@ def aging_report(
   bucket_data = {label: {"days_min": dmin, "days_max": dmax, "total": 0.0, "count": 0} for label, dmin, dmax in buckets_def}
 
   for inv in invoices:
-    if inv.status in ("paid", "cancelled"):
+    if inv.status == InvoiceStatus.cancelled:
+      continue
+    amount = float(invoice_balance_due(inv))
+    if amount <= 0.01:
       continue
     due = inv.due_date or (inv.issue_date or as_of_date) + timedelta(days=30)
     days_overdue = (as_of_date - due).days
-    amount = float(inv.total or 0)
     for label, dmin, dmax in buckets_def:
       if dmin <= days_overdue <= dmax:
         b = bucket_data[label]
