@@ -2,12 +2,13 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api import deps
 from app.db.models.accounting import Customer, Invoice, InvoiceStatus
 from app.middleware.tenant_context import get_current_tenant_id
 from app.schemas.accounting import CustomerCreate, CustomerRead, CustomerUpdate
+from app.utils.invoice_payments import invoice_amount_paid, invoice_balance_due
 
 router = APIRouter(tags=["customers"])
 
@@ -18,6 +19,8 @@ class StatementLine(BaseModel):
   issue_date: str
   due_date: str | None
   total: float
+  amount_paid: float = 0
+  balance_due: float = 0
   currency: str
   status: str
 
@@ -63,11 +66,18 @@ def create_customer(
   ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
+  ctype = payload.customer_type if payload.customer_type in ("individual", "company") else "company"
   customer = Customer(
     tenant_id=tenant_id,
+    customer_type=ctype,
     name=payload.name,
     email=payload.email,
+    phone=payload.phone,
     address=payload.address,
+    contact_name=payload.contact_name if ctype == "company" else None,
+    registration_number=payload.registration_number if ctype == "company" else None,
+    vat_number=payload.vat_number,
+    id_number=payload.id_number if ctype == "individual" else None,
   )
   db.add(customer)
   db.commit()
@@ -107,12 +117,17 @@ def update_customer(
   )
   if not customer:
     raise HTTPException(status_code=404, detail="Customer not found")
-  if payload.name is not None:
-    customer.name = payload.name
-  if payload.email is not None:
-    customer.email = payload.email
-  if payload.address is not None:
-    customer.address = payload.address
+  data = payload.model_dump(exclude_unset=True)
+  if "customer_type" in data and data["customer_type"] not in (None, "individual", "company"):
+    raise HTTPException(status_code=400, detail="customer_type must be individual or company")
+  for field, value in data.items():
+    setattr(customer, field, value)
+  ctype = customer.customer_type or "company"
+  if ctype == "individual":
+    customer.contact_name = None
+    customer.registration_number = None
+  else:
+    customer.id_number = None
   db.add(customer)
   db.commit()
   db.refresh(customer)
@@ -157,6 +172,7 @@ def get_customer_statement(
   # Invoices that reference this customer by id or by name (for legacy one-off customers)
   invoices = (
     db.query(Invoice)
+    .options(joinedload(Invoice.payments))
     .filter(
       Invoice.tenant_id == tenant_id,
       (Invoice.customer_id == customer_id) | (Invoice.customer_name == customer.name),
@@ -166,8 +182,14 @@ def get_customer_statement(
   )
 
   total_invoiced = sum(float(inv.total or 0) for inv in invoices)
-  total_paid = sum(float(inv.total or 0) for inv in invoices if inv.status == InvoiceStatus.paid)
-  total_outstanding = total_invoiced - total_paid
+  total_paid = 0.0
+  total_outstanding = 0.0
+  for inv in invoices:
+    if inv.status == InvoiceStatus.cancelled:
+      continue
+    paid = float(invoice_amount_paid(inv))
+    total_paid += paid
+    total_outstanding += max(0.0, float(inv.total or 0) - paid)
   currency = invoices[0].currency if invoices else "ZAR"
 
   lines = [
@@ -177,6 +199,8 @@ def get_customer_statement(
       issue_date=str(inv.issue_date),
       due_date=str(inv.due_date) if inv.due_date else None,
       total=float(inv.total or 0),
+      amount_paid=float(invoice_amount_paid(inv)),
+      balance_due=float(invoice_balance_due(inv)),
       currency=inv.currency or "ZAR",
       status=inv.status.value,
     )

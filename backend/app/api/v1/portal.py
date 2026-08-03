@@ -286,6 +286,20 @@ def get_my_payslip_pdf(
   company_address = getattr(tenant, "address", None) or None
   company_registration_number = getattr(tenant, "company_registration_number", None) or None
   company_logo_url = getattr(tenant, "logo_url", None) if tenant else None
+  from app.utils.payroll import sa_tax_year_start, sum_payslip_ytd
+
+  year_start = sa_tax_year_start(p.period_start)
+  ytd_slips = (
+    db.query(Payslip)
+    .filter(
+      Payslip.tenant_id == employee.tenant_id,
+      Payslip.employee_id == employee.id,
+      Payslip.period_start >= year_start,
+      Payslip.period_start <= p.period_start,
+    )
+    .all()
+  )
+  ytd_tax, ytd_earnings = sum_payslip_ytd(ytd_slips, through_period_start=p.period_start)
   html = build_payslip_html(
     company_name=company_name,
     company_registration_number=company_registration_number,
@@ -303,6 +317,8 @@ def get_my_payslip_pdf(
     company_address=company_address,
     company_logo_url=company_logo_url,
     theme=theme,
+    ytd_tax=ytd_tax,
+    ytd_earnings=ytd_earnings,
   )
   pdf_bytes = render_invoice_pdf(html_body=html)
   return StreamingResponse(

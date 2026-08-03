@@ -57,6 +57,7 @@ class Account(Base):
 class InvoiceStatus(str, enum.Enum):
   draft = "draft"
   sent = "sent"
+  partially_paid = "partially_paid"
   paid = "paid"
   overdue = "overdue"
   cancelled = "cancelled"
@@ -68,9 +69,16 @@ class Customer(Base):
   id: Mapped[int] = mapped_column(primary_key=True)
   tenant_id: Mapped[int] = mapped_column(index=True)
 
-  name: Mapped[str] = mapped_column(String(255), nullable=False)
+  # individual | company
+  customer_type: Mapped[str] = mapped_column(String(20), default="company", nullable=False)
+  name: Mapped[str] = mapped_column(String(255), nullable=False)  # legal / display name
   email: Mapped[str | None] = mapped_column(String(255))
+  phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
   address: Mapped[str | None] = mapped_column(Text)
+  contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)  # company contact person
+  registration_number: Mapped[str | None] = mapped_column(String(100), nullable=True)  # company reg / CIPC
+  vat_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+  id_number: Mapped[str | None] = mapped_column(String(50), nullable=True)  # individual ID / passport
 
   created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
   updated_at: Mapped[datetime] = mapped_column(
@@ -95,6 +103,10 @@ class Invoice(Base):
 
   currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ZAR")
   subtotal: Mapped[float] = mapped_column(Numeric(18, 4), default=0)
+  # percent | amount | None — how the user entered the discount
+  discount_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+  discount_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+  discount_amount: Mapped[float] = mapped_column(Numeric(18, 4), default=0)  # currency amount applied
   vat_amount: Mapped[float] = mapped_column(Numeric(18, 4), default=0)
   total: Mapped[float] = mapped_column(Numeric(18, 4), default=0)
 
@@ -117,6 +129,11 @@ class Invoice(Base):
 
   lines: Mapped[list["InvoiceLine"]] = relationship(
     back_populates="invoice", cascade="all, delete-orphan"
+  )
+  payments: Mapped[list["InvoicePayment"]] = relationship(
+    back_populates="invoice",
+    cascade="all, delete-orphan",
+    order_by="InvoicePayment.payment_date",
   )
 
 
@@ -293,4 +310,25 @@ class BankTransaction(Base):
 
   is_reconciled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
+
+class InvoicePayment(Base):
+  """A customer payment allocated to a single invoice."""
+  __tablename__ = "invoice_payments"
+
+  id: Mapped[int] = mapped_column(primary_key=True)
+  tenant_id: Mapped[int] = mapped_column(index=True)
+  invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id", ondelete="CASCADE"), index=True)
+
+  amount: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+  payment_date: Mapped[datetime] = mapped_column(Date, nullable=False)
+  method: Mapped[str | None] = mapped_column(String(50), nullable=True)  # e.g. eft, cash, card
+  reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+  notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+  bank_transaction_id: Mapped[int | None] = mapped_column(
+    ForeignKey("bank_transactions.id", ondelete="SET NULL"), nullable=True, index=True
+  )
+
+  created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+  invoice: Mapped["Invoice"] = relationship(back_populates="payments")
 

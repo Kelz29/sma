@@ -1,35 +1,59 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, type UseFormRegister, type UseFormWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import { api } from "@/lib/axios";
 import { BASE_CURRENCY_CODE, formatAmount } from "@/lib/currency";
-import { CreateCustomerModal, type CustomerOption } from "../components/CreateCustomerModal";
+import { CreateCustomerModal, type CustomerOption, type CustomerPayload } from "../components/CreateCustomerModal";
 
 export type PdfTheme = "classic" | "modern" | "minimal" | "elegant" | "bold" | "professional";
 export type PdfDoctype = "invoice" | "quotation";
+
+const emptyToUndef = (v: unknown) => (v === "" || v === null || v === undefined ? undefined : v);
 
 const lineSchema = z.object({
   description: z.string().min(1),
   quantity: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
-  vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
+  vat_rate: z.preprocess(emptyToUndef, z.coerce.number().min(0).max(100).optional().nullable()),
 });
 
 const invoiceSchema = z.object({
-  customer_id: z.union([z.number(), z.literal("")]).optional(),
+  customer_id: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? "" : Number(v)),
+    z.union([z.number().int().positive(), z.literal("")]).optional()
+  ),
   customer_name: z.string().optional(),
   customer_email: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional().or(z.literal(""))),
-  invoice_number: z.coerce.number().int().positive().optional().nullable(),
+  invoice_number: z.preprocess(emptyToUndef, z.coerce.number().int().positive().optional().nullable()),
   issue_date: z.string().min(1, "Issue date is required"),
   due_date: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   currency: z.string().min(1).default(BASE_CURRENCY_CODE),
-  vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
+  vat_rate: z.preprocess(emptyToUndef, z.coerce.number().min(0).max(100).optional().nullable()),
   vat_country: z.preprocess((v) => (v === "" ? undefined : v), z.string().length(2).optional()),
   notes: z.string().optional().nullable(),
   is_recurring: z.boolean().default(false),
-  recurring_interval_days: z.coerce.number().int().positive().optional().nullable(),
+  recurring_interval_days: z.preprocess(emptyToUndef, z.coerce.number().int().positive().optional().nullable()),
+  discount_type: z.enum(["percent", "amount"]).optional().nullable(),
+  discount_value: z.preprocess(emptyToUndef, z.coerce.number().min(0).optional().nullable()),
   lines: z.array(lineSchema).min(1, "Add at least one line item"),
 }).refine(
   (data) => {
@@ -42,14 +66,160 @@ const invoiceSchema = z.object({
 
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
+function applyDiscountToPayload(payload: Record<string, unknown>, values: InvoiceFormValues, isUpdate: boolean) {
+  const dtype = values.discount_type;
+  const dval = values.discount_value != null && values.discount_value !== "" ? Number(values.discount_value) : null;
+  if ((dtype === "percent" || dtype === "amount") && dval != null && dval > 0) {
+    payload.discount_type = dtype;
+    payload.discount_value = dval;
+  } else if (isUpdate) {
+    payload.clear_discount = true;
+  }
+}
+
+function computeFormTotals(values: Pick<InvoiceFormValues, "lines" | "discount_type" | "discount_value">) {
+  let subtotal = 0;
+  let vatGross = 0;
+  for (const l of values.lines ?? []) {
+    const desc = (l.description ?? "").toString().trim();
+    if (!desc) continue;
+    const lineTotal = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
+    subtotal += lineTotal;
+    const vr = l.vat_rate != null && l.vat_rate !== "" ? Number(l.vat_rate) : null;
+    if (vr != null && !Number.isNaN(vr)) {
+      vatGross += lineTotal * vr / 100;
+    }
+  }
+  let discountAmount = 0;
+  const dval = values.discount_value != null && values.discount_value !== "" ? Number(values.discount_value) : 0;
+  if (values.discount_type === "percent" && dval > 0) {
+    discountAmount = subtotal * Math.min(100, dval) / 100;
+  } else if (values.discount_type === "amount" && dval > 0) {
+    discountAmount = dval;
+  }
+  discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+  const vatAmount = subtotal > 0 && discountAmount > 0 ? vatGross * ((subtotal - discountAmount) / subtotal) : vatGross;
+  const total = subtotal - discountAmount + vatAmount;
+  return { subtotal, discountAmount, vatAmount, total };
+}
+
+function SortableInvoiceLine({
+  id,
+  index,
+  register,
+  watch,
+  remove,
+  onSaveAsTemplate,
+  savePending,
+}: {
+  id: string;
+  index: number;
+  register: UseFormRegister<InvoiceFormValues>;
+  watch: UseFormWatch<InvoiceFormValues>;
+  remove: (index: number) => void;
+  onSaveAsTemplate: (line: { description: string; quantity: number; unit_price: number; vat_rate?: number }) => void;
+  savePending: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const lineVal = watch(`lines.${index}`);
+  const desc = (lineVal?.description ?? "").toString().trim();
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex gap-2 items-end flex-wrap rounded-lg ${
+        isDragging ? "opacity-80 ring-2 ring-emerald-400 bg-white dark:bg-slate-800 shadow-md z-10 relative" : ""
+      }`}
+    >
+      <button
+        type="button"
+        className="mb-0.5 touch-none cursor-grab active:cursor-grabbing rounded-lg border border-slate-300 dark:border-slate-600 px-1.5 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        title="Drag to reorder"
+        aria-label="Drag to reorder line"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <input
+        placeholder="Description"
+        className="flex-[2] min-w-[140px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+        {...register(`lines.${index}.description` as const)}
+      />
+      <input
+        type="number"
+        step="0.01"
+        min={0.01}
+        placeholder="Qty"
+        className="w-16 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100"
+        {...register(`lines.${index}.quantity` as const)}
+      />
+      <input
+        type="number"
+        step="0.01"
+        min={0}
+        placeholder="Price"
+        className="w-24 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100"
+        {...register(`lines.${index}.unit_price` as const)}
+      />
+      <input
+        type="number"
+        step="0.01"
+        min={0}
+        max={100}
+        placeholder="VAT%"
+        className="w-14 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100"
+        {...register(`lines.${index}.vat_rate` as const)}
+      />
+      {desc && (
+        <button
+          type="button"
+          onClick={() => {
+            const q = Number(lineVal?.quantity) || 1;
+            const p = Number(lineVal?.unit_price) ?? 0;
+            const v = lineVal?.vat_rate != null && lineVal?.vat_rate !== "" ? Number(lineVal.vat_rate) : undefined;
+            onSaveAsTemplate({ description: desc, quantity: q, unit_price: p, vat_rate: v });
+          }}
+          disabled={savePending}
+          className="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs"
+          title="Save as reusable line item"
+        >
+          Save
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => remove(index)}
+        className="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs"
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
 interface InvoiceSummary {
   id: number;
   invoice_number: number;
   customer_name: string;
   issue_date: string;
   total: number;
+  amount_paid?: number;
+  balance_due?: number;
   currency: string;
   status: string;
+  payments?: Array<{
+    id: number;
+    amount: number;
+    payment_date: string;
+    method?: string | null;
+    reference?: string | null;
+  }>;
 }
 
 export function InvoicesPage() {
@@ -66,6 +236,13 @@ export function InvoicesPage() {
   const [viewingInvoiceId, setViewingInvoiceId] = useState<number | null>(null);
   const [makeRecurringInvoiceId, setMakeRecurringInvoiceId] = useState<number | null>(null);
   const [recurringIntervalDays, setRecurringIntervalDays] = useState(30);
+  const [paymentInvoice, setPaymentInvoice] = useState<InvoiceSummary | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState("eft");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const { data: customers } = useQuery<CustomerOption[]>({
     queryKey: ["customers"],
@@ -201,7 +378,7 @@ export function InvoicesPage() {
   });
 
   const createCustomerMutation = useMutation({
-    mutationFn: async (body: { name: string; email?: string; address?: string }) => {
+    mutationFn: async (body: CustomerPayload) => {
       const res = await api.post("/customers/", body);
       return res.data as CustomerOption;
     },
@@ -262,6 +439,7 @@ export function InvoicesPage() {
       if (values.invoice_number != null && values.invoice_number > 0) {
         payload.invoice_number = Number(values.invoice_number);
       }
+      applyDiscountToPayload(payload, values, false);
       const res = await api.post("/invoices/", payload);
       return res.data;
     },
@@ -309,6 +487,7 @@ export function InvoicesPage() {
         const email = (values.customer_email as string)?.toString().trim();
         if (email) payload.customer_email = email;
       }
+      applyDiscountToPayload(payload, values, true);
       const res = await api.put(`/invoices/${id}`, payload);
       return res.data;
     },
@@ -319,14 +498,44 @@ export function InvoicesPage() {
     },
   });
 
-  const markDoneMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await api.put(`/invoices/${id}`, { status: "paid" });
+  const recordPaymentMutation = useMutation({
+    mutationFn: async (body: {
+      invoiceId: number;
+      amount: number;
+      payment_date: string;
+      method?: string;
+      reference?: string;
+      notes?: string;
+    }) => {
+      const { invoiceId, ...payload } = body;
+      const res = await api.post(`/invoices/${invoiceId}/payments`, payload);
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      setPaymentInvoice(null);
+      setPaymentError(null);
+      setEmailMessage({ type: "success", text: "Payment recorded." });
+      setTimeout(() => setEmailMessage(null), 3000);
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Could not record payment.";
+      setPaymentError(typeof detail === "string" ? detail : "Could not record payment.");
     },
   });
+
+  const openRecordPayment = (inv: InvoiceSummary) => {
+    const balance = Number(inv.balance_due ?? Math.max(0, Number(inv.total) - Number(inv.amount_paid ?? 0)));
+    setPaymentInvoice(inv);
+    setPaymentAmount(balance > 0 ? String(Number(balance.toFixed(2))) : "");
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentMethod("eft");
+    setPaymentReference("");
+    setPaymentNotes("");
+    setPaymentError(null);
+  };
 
   const duplicateMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -386,12 +595,38 @@ export function InvoicesPage() {
       currency: BASE_CURRENCY_CODE,
       issue_date: new Date().toISOString().slice(0, 10),
       due_date: "",
+      discount_type: null,
+      discount_value: undefined,
       lines: [{ description: "", quantity: 1, unit_price: 0 }],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "lines" });
+  const { fields, append, remove, move } = useFieldArray({ control, name: "lines" });
   const selectedCustomerId = watch("customer_id");
+  const watchedLines = watch("lines");
+  const watchedDiscountType = watch("discount_type");
+  const watchedDiscountValue = watch("discount_value");
+  const watchedCurrency = watch("currency") || BASE_CURRENCY_CODE;
+  const formTotals = computeFormTotals({
+    lines: watchedLines,
+    discount_type: watchedDiscountType,
+    discount_value: watchedDiscountValue,
+  });
+
+  const lineSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleLineDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex >= 0 && newIndex >= 0) {
+      move(oldIndex, newIndex);
+    }
+  };
 
   const onSubmit = async (values: InvoiceFormValues) => {
     try {
@@ -412,6 +647,8 @@ export function InvoicesPage() {
           notes: "",
           is_recurring: false,
           recurring_interval_days: undefined,
+          discount_type: null,
+          discount_value: undefined,
           lines: [{ description: "", quantity: 1, unit_price: 0, vat_rate: undefined }],
         });
       }
@@ -475,6 +712,8 @@ export function InvoicesPage() {
       notes: "",
       is_recurring: false,
       recurring_interval_days: undefined,
+      discount_type: null,
+      discount_value: undefined,
       lines: [{ description: "", quantity: 1, unit_price: 0, vat_rate: undefined }],
     });
     setNewInvoiceOpen(true);
@@ -495,8 +734,23 @@ export function InvoicesPage() {
         notes: string | null;
         is_recurring: boolean;
         recurring_interval_days: number | null;
+        discount_type: "percent" | "amount" | null;
+        discount_percent: number | null;
+        discount_amount: number | null;
         lines: { description: string; quantity: number; unit_price: number; vat_rate: number | null }[];
       };
+
+      const discountType = inv.discount_type === "percent" || inv.discount_type === "amount" ? inv.discount_type : null;
+      const discountValue =
+        discountType === "percent"
+          ? inv.discount_percent != null
+            ? Number(inv.discount_percent)
+            : undefined
+          : discountType === "amount"
+          ? inv.discount_amount != null
+            ? Number(inv.discount_amount)
+            : undefined
+          : undefined;
 
       reset({
         customer_id: "",
@@ -510,6 +764,8 @@ export function InvoicesPage() {
         notes: inv.notes ?? "",
         is_recurring: inv.is_recurring,
         recurring_interval_days: inv.recurring_interval_days ?? undefined,
+        discount_type: discountType,
+        discount_value: discountValue,
         lines: inv.lines.map((l) => ({
           description: l.description,
           quantity: Number(l.quantity),
@@ -773,12 +1029,27 @@ export function InvoicesPage() {
                 <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Customer</th>
                 <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Issue date</th>
                 <th className="py-3 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</th>
+                <th className="py-3 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Paid</th>
+                <th className="py-3 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Balance</th>
                 <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="py-3 pr-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {data.map((inv, index) => (
+                {data.map((inv, index) => {
+                  const paid = Number(inv?.amount_paid ?? 0);
+                  const balance = Number(
+                    inv?.balance_due ?? Math.max(0, Number(inv?.total ?? 0) - paid)
+                  );
+                  const statusClass =
+                    inv?.status === "paid"
+                      ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200"
+                      : inv?.status === "partially_paid"
+                        ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200"
+                        : inv?.status === "cancelled"
+                          ? "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                          : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300";
+                  return (
                   <tr key={inv?.id ?? index} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                     <td className="py-3 pl-4 font-mono text-xs text-slate-600 dark:text-slate-400">
                       {String(inv?.invoice_number ?? "").padStart(5, "0")}
@@ -788,9 +1059,15 @@ export function InvoicesPage() {
                     <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-200">
                       {formatAmount(Number(inv?.total ?? 0), inv?.currency ?? BASE_CURRENCY_CODE)}
                     </td>
+                    <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">
+                      {formatAmount(paid, inv?.currency ?? BASE_CURRENCY_CODE)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-200">
+                      {formatAmount(balance, inv?.currency ?? BASE_CURRENCY_CODE)}
+                    </td>
                     <td className="py-3 px-4">
-                      <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                        {inv?.status ?? ""}
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusClass}`}>
+                        {(inv?.status ?? "").replace(/_/g, " ")}
                       </span>
                     </td>
                     <td className="py-3 pr-4 text-right">
@@ -826,11 +1103,11 @@ export function InvoicesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => inv?.id != null && markDoneMutation.mutate(inv.id)}
-                          disabled={!inv || inv.status === "paid" || markDoneMutation.isPending}
+                          onClick={() => inv && openRecordPayment(inv)}
+                          disabled={!inv || inv.status === "paid" || inv.status === "cancelled" || balance <= 0}
                           className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 disabled:opacity-50"
                         >
-                          Mark as done
+                          Record payment
                         </button>
                         <button
                           type="button"
@@ -849,12 +1126,137 @@ export function InvoicesPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
       </div>
+
+      {/* Record payment modal */}
+      {paymentInvoice != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setPaymentInvoice(null)}>
+          <div
+            className="bg-white dark:bg-slate-800 dark:border dark:border-slate-600 rounded-xl shadow-apple-lg w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Record payment
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Invoice {String(paymentInvoice.invoice_number).padStart(5, "0")} ·{" "}
+              {paymentInvoice.customer_name}
+            </p>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Balance due:{" "}
+              <strong>
+                {formatAmount(
+                  Number(
+                    paymentInvoice.balance_due ??
+                      Math.max(0, Number(paymentInvoice.total) - Number(paymentInvoice.amount_paid ?? 0))
+                  ),
+                  paymentInvoice.currency ?? BASE_CURRENCY_CODE
+                )}
+              </strong>
+            </p>
+            {paymentInvoice.payments && paymentInvoice.payments.length > 0 && (
+              <div className="mt-3 max-h-28 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 p-2 text-xs text-slate-600 dark:text-slate-300">
+                {paymentInvoice.payments.map((p) => (
+                  <div key={p.id} className="flex justify-between gap-2 py-0.5">
+                    <span>{p.payment_date}{p.method ? ` · ${p.method}` : ""}</span>
+                    <span>{formatAmount(Number(p.amount), paymentInvoice.currency ?? BASE_CURRENCY_CODE)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 space-y-3">
+              <label className="block text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Amount</span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Payment date</span>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Method</span>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                >
+                  <option value="eft">EFT / bank transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Reference (optional)</span>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                  placeholder="Bank ref / cheque no."
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-600 dark:text-slate-300">Notes (optional)</span>
+                <input
+                  type="text"
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+            {paymentError && (
+              <p className="mt-3 text-sm text-red-600 dark:text-red-400">{paymentError}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentInvoice(null)}
+                className="rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={recordPaymentMutation.isPending || !paymentAmount || Number(paymentAmount) <= 0}
+                onClick={() => {
+                  if (!paymentInvoice) return;
+                  recordPaymentMutation.mutate({
+                    invoiceId: paymentInvoice.id,
+                    amount: Number(paymentAmount),
+                    payment_date: paymentDate,
+                    method: paymentMethod || undefined,
+                    reference: paymentReference.trim() || undefined,
+                    notes: paymentNotes.trim() || undefined,
+                  });
+                }}
+                className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {recordPaymentMutation.isPending ? "Saving…" : "Save payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Make recurring modal */}
       {makeRecurringInvoiceId != null && (
@@ -1140,37 +1542,82 @@ export function InvoicesPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {fields.map((field, index) => {
-                    const lineVal = watch(`lines.${index}`);
-                    const desc = (lineVal?.description ?? "").toString().trim();
-                    return (
-                      <div key={field.id} className="flex gap-2 items-end flex-wrap">
-                        <input placeholder="Description" className="flex-[2] min-w-[140px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" {...register(`lines.${index}.description` as const)} />
-                        <input type="number" step="0.01" min={0.01} placeholder="Qty" className="w-16 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100" {...register(`lines.${index}.quantity` as const)} />
-                        <input type="number" step="0.01" min={0} placeholder="Price" className="w-24 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100" {...register(`lines.${index}.unit_price` as const)} />
-                        <input type="number" step="0.01" min={0} max={100} placeholder="VAT%" className="w-14 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100" {...register(`lines.${index}.vat_rate` as const)} />
-                        {desc && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const q = Number(lineVal?.quantity) || 1;
-                              const p = Number(lineVal?.unit_price) ?? 0;
-                              const v = lineVal?.vat_rate != null && lineVal?.vat_rate !== "" ? Number(lineVal.vat_rate) : undefined;
-                              saveLineAsTemplateMutation.mutate({ description: desc, quantity: q, unit_price: p, vat_rate: v });
-                            }}
-                            disabled={saveLineAsTemplateMutation.isPending}
-                            className="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs"
-                            title="Save as reusable line item"
-                          >
-                            Save
-                          </button>
-                        )}
-                        <button type="button" onClick={() => remove(index)} className="rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs">Remove</button>
-                      </div>
-                    );
-                  })}
+                  <DndContext sensors={lineSensors} collisionDetection={closestCenter} onDragEnd={handleLineDragEnd}>
+                    <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                      {fields.map((field, index) => (
+                        <SortableInvoiceLine
+                          key={field.id}
+                          id={field.id}
+                          index={index}
+                          register={register}
+                          watch={watch}
+                          remove={remove}
+                          onSaveAsTemplate={(line) => saveLineAsTemplateMutation.mutate(line)}
+                          savePending={saveLineAsTemplateMutation.isPending}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </div>
                 {(errors.lines?.root ?? errors.lines) && <p className="mt-1 text-xs text-red-500 dark:text-red-400">Add at least one line item.</p>}
+                {fields.length > 1 && (
+                  <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Drag the handle to reorder lines.</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Discount</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={watchedDiscountType ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setValue(
+                          "discount_type",
+                          v === "percent" || v === "amount" ? v : null,
+                          { shouldDirty: true }
+                        );
+                        if (!v) setValue("discount_value", undefined, { shouldDirty: true });
+                      }}
+                      className="w-28 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-primary"
+                    >
+                      <option value="">None</option>
+                      <option value="percent">Percent %</option>
+                      <option value="amount">Amount</option>
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={watchedDiscountType === "percent" ? 100 : undefined}
+                      placeholder={watchedDiscountType === "percent" ? "%" : watchedCurrency}
+                      disabled={!watchedDiscountType}
+                      {...register("discount_value")}
+                      className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-primary disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-800/50 px-3 py-2 text-sm">
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                    <span>Subtotal</span>
+                    <span>{formatAmount(formTotals.subtotal, watchedCurrency)}</span>
+                  </div>
+                  {formTotals.discountAmount > 0 && (
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400 mt-1">
+                      <span>Discount</span>
+                      <span>−{formatAmount(formTotals.discountAmount, watchedCurrency)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-600 dark:text-slate-400 mt-1">
+                    <span>VAT</span>
+                    <span>{formatAmount(formTotals.vatAmount, watchedCurrency)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100 mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">
+                    <span>Total</span>
+                    <span>{formatAmount(formTotals.total, watchedCurrency)}</span>
+                  </div>
+                </div>
               </div>
 
               <div>
