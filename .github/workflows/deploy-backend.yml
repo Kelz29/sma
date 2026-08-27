@@ -15,16 +15,11 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Home server runner registered for Kelz29/sma (cannot use ubuntu-latest:
+    # the API host is on Tailscale and not reachable from GitHub-hosted runners).
+    runs-on: [self-hosted, linux, sma]
     steps:
       - name: Deploy SMA backend on home server
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.SMA_SSH_HOST }}
-          username: ${{ secrets.SMA_SSH_USER }}
-          key: ${{ secrets.SMA_SSH_KEY }}
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            ~/Documents/sma/deploy.sh
+        run: |
+          set -euo pipefail
+          ~/Documents/sma/deploy.sh
