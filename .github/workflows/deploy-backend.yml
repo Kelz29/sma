@@ -1,0 +1,30 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy SMA backend on home server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SMA_SSH_HOST }}
+          username: ${{ secrets.SMA_SSH_USER }}
+          key: ${{ secrets.SMA_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            ~/Documents/sma/deploy.sh
