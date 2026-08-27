@@ -42,11 +42,19 @@ class Settings(BaseSettings):
   SMTP_USER: str | None = None
   SMTP_PASSWORD: str | None = None
   SMTP_FROM: str | None = None
-  # Base URL for links in emails (e.g. https://app.smartseen.com). Used for verify-email link.
+  SMTP_FROM_EMAIL: str | None = None  # alias used by some .env files / SES samples
+  SMTP_FROM_NAME: str | None = None  # alias for EMAIL_FROM_NAME
+  SMTP_USE_SSL: bool = False  # True + port 465 for implicit SSL (cPanel)
+  EMAIL_FROM_NAME: str = "SmartSeen"
+  # Base URL for links in emails (e.g. https://app.smartseen.co.za). Used for verify-email link.
   APP_BASE_URL: str = "http://localhost:5173"
-  # Redis (optional). When set, used for rate limiting, metrics aggregation, and caching across workers.
-  # Example: redis://localhost:6379/0
+  FRONTEND_URL: str | None = None  # alias for APP_BASE_URL
+  # Redis (optional). When set, used for rate limiting, metrics, caching, and Celery broker.
+  # Prefer redis://127.0.0.1:6379/1 for SMA so other apps on /0 do not clash.
   REDIS_URL: str | None = None
+  # Celery broker for email worker. Defaults to REDIS_URL when unset.
+  CELERY_BROKER_URL: str | None = None
+  EMAIL_MAX_ATTEMPTS: int = 5
 
   # Allow extra environment variables (e.g. EMAIL_*) without failing validation.
   model_config = SettingsConfigDict(
@@ -54,6 +62,17 @@ class Settings(BaseSettings):
     case_sensitive=True,
     extra="ignore",
   )
+
+  def model_post_init(self, __context: object) -> None:  # noqa: ANN001
+    # Map SES / legacy env aliases onto the canonical settings.
+    if not self.SMTP_FROM and self.SMTP_FROM_EMAIL:
+      object.__setattr__(self, "SMTP_FROM", self.SMTP_FROM_EMAIL)
+    if self.SMTP_FROM_NAME:
+      object.__setattr__(self, "EMAIL_FROM_NAME", self.SMTP_FROM_NAME)
+    if self.FRONTEND_URL and (
+      not self.APP_BASE_URL or self.APP_BASE_URL.rstrip("/") in ("http://localhost:5173", "http://127.0.0.1:5173")
+    ):
+      object.__setattr__(self, "APP_BASE_URL", self.FRONTEND_URL.rstrip("/"))
 
   @property
   def SQLALCHEMY_DATABASE_URI(self) -> str:
@@ -65,6 +84,10 @@ class Settings(BaseSettings):
       f"mysql+mysqldb://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
       f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DB}"
     )
+
+  @property
+  def celery_broker_url(self) -> str | None:
+    return (self.CELERY_BROKER_URL or self.REDIS_URL or "").strip() or None
 
 
 settings = Settings()

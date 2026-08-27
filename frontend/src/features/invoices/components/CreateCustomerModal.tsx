@@ -93,8 +93,20 @@ export function CreateCustomerModal({
       onCreated(customer);
       reset();
       onClose();
-    } catch {
-      setError("Could not create customer. Try again.");
+    } catch (err: unknown) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+          : undefined;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: { msg?: string }) => d?.msg).filter(Boolean).join(". ")
+            : err instanceof Error
+              ? err.message
+              : null;
+      setError(msg || "Could not create customer. Try again.");
     } finally {
       setSaving(false);
     }

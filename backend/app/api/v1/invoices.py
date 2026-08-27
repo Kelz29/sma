@@ -887,15 +887,29 @@ def email_invoice(
   tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
   html = _invoice_to_html(invoice, payload.theme, payload.doctype, tenant, db)
   pdf_bytes = _render_invoice_pdf(html)
-  # Send email (stub: in production use SMTP or SendGrid etc.)
+  import base64
+  import time
+
+  from app.utils.email_queue import KIND_INVOICE, enqueue_email
+
   try:
-    from app.utils.email_sender import send_invoice_email
-    send_invoice_email(to_email=to_email, invoice_number=invoice.invoice_number, pdf_bytes=pdf_bytes, doctype=payload.doctype)
+    enqueue_email(
+      db,
+      kind=KIND_INVOICE,
+      to_email=to_email,
+      payload={
+        "invoice_number": invoice.invoice_number,
+        "doctype": payload.doctype,
+        "pdf_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+      },
+      # Unique per send attempt so re-sends are allowed
+      idempotency_key=f"invoice:{invoice.id}:{payload.doctype}:{to_email}:{int(time.time())}",
+    )
   except Exception:
     raise HTTPException(
       status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-      detail="Email could not be sent. Please try again later.",
+      detail="Email could not be queued. Please try again later.",
     )
 
-  return {"ok": True, "message": f"Sent to {to_email}"}
+  return {"ok": True, "message": f"Queued email to {to_email}"}
 

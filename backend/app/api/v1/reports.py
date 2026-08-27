@@ -19,7 +19,7 @@ from app.schemas.reports import (
   SummaryPoint,
   SummaryReport,
 )
-from app.utils.email_sender import send_report_email
+from app.utils.email_queue import KIND_REPORT, enqueue_email
 from app.utils.invoice_payments import invoice_balance_due
 
 router = APIRouter(tags=["reports"])
@@ -444,6 +444,20 @@ def email_report(
 
   subject = f"{report_type.replace('_', ' ').title()} report"
   filename = f"{report_type}-report.csv"
-  send_report_email(to_email=payload.to_email, subject=subject, body="Please find the report attached.", attachment_bytes=data, filename=filename)
-  return {"ok": True, "message": f"Report emailed to {payload.to_email}"}
+  import base64
+  import time
+
+  enqueue_email(
+    db,
+    kind=KIND_REPORT,
+    to_email=payload.to_email,
+    payload={
+      "subject": subject,
+      "body": "Please find the report attached.",
+      "filename": filename,
+      "attachment_base64": base64.b64encode(data).decode("ascii"),
+    },
+    idempotency_key=f"report:{tenant_id}:{report_type}:{payload.to_email}:{int(time.time())}",
+  )
+  return {"ok": True, "message": f"Report email queued to {payload.to_email}"}
 
