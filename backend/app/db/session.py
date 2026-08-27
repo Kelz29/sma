@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist  # noqa: F401
+from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist, email_outbox  # noqa: F401
 
 _connect_args = {}
 if getattr(settings, "USE_SQLITE", False):
@@ -60,6 +60,20 @@ if getattr(settings, "USE_SQLITE", False):
     for create_sql in [
       "CREATE TABLE IF NOT EXISTS waitlist_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, email VARCHAR(255) NOT NULL, created_at DATETIME)",
       "CREATE TABLE IF NOT EXISTS email_verification_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, token VARCHAR(64) NOT NULL UNIQUE, expires_at DATETIME NOT NULL, created_at DATETIME, FOREIGN KEY (user_id) REFERENCES users(id))",
+      """CREATE TABLE IF NOT EXISTS email_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind VARCHAR(64) NOT NULL,
+        to_email VARCHAR(255) NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        idempotency_key VARCHAR(191) NOT NULL UNIQUE,
+        last_error TEXT,
+        scheduled_at DATETIME,
+        sent_at DATETIME,
+        created_at DATETIME,
+        updated_at DATETIME
+      )""",
     ]:
       try:
         conn.execute(text(create_sql))
@@ -146,6 +160,29 @@ else:
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_ev_token (token),
           FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+      """))
+      conn.commit()
+    except Exception:
+      conn.rollback()
+    try:
+      conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS email_outbox (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          kind VARCHAR(64) NOT NULL,
+          to_email VARCHAR(255) NOT NULL,
+          payload_json MEDIUMTEXT NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          attempts INT NOT NULL DEFAULT 0,
+          idempotency_key VARCHAR(191) NOT NULL,
+          last_error TEXT NULL,
+          scheduled_at DATETIME NOT NULL,
+          sent_at DATETIME NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_email_outbox_idempotency (idempotency_key),
+          INDEX idx_email_outbox_status (status),
+          INDEX idx_email_outbox_kind (kind)
         )
       """))
       conn.commit()

@@ -18,7 +18,7 @@ if PROJECT_ROOT not in sys.path:
 
 from app.core.config import settings  # type: ignore  # noqa: E402
 from app.db.base import Base  # type: ignore  # noqa: E402
-from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist  # type: ignore  # noqa: E402,F401
+from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist, email_outbox  # type: ignore  # noqa: E402,F401
 from app.api import deps  # type: ignore  # noqa: E402
 from app.main import app  # type: ignore  # noqa: E402
 
