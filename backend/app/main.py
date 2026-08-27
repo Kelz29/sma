@@ -52,12 +52,27 @@ app = FastAPI(title=settings.APP_NAME)
 def startup_validate_config() -> None:
   _validate_production_config()
 
-# CORS: in production set CORS_ORIGINS to a comma-separated list of allowed origins (e.g. https://app.example.com).
+# CORS: comma-separated exact origins in CORS_ORIGINS, plus any https://*.smartseen.co.za (and apex).
 _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()] if settings.CORS_ORIGINS != "*" else ["*"]
 if not _origins:
   # Misconfigured env (e.g. CORS_ORIGINS=,) would send no ACAO header; fall back to model defaults.
   _default = Settings.model_fields["CORS_ORIGINS"].default
   _origins = [o.strip() for o in str(_default).split(",") if o.strip()]
+# Match https://smartseen.co.za and https://<sub>.smartseen.co.za (e.g. app.smartseen.co.za).
+_SMARTSEEN_ORIGIN_RE = r"https://([a-zA-Z0-9-]+\.)*smartseen\.co\.za"
+
+
+def _origin_allowed(origin: str | None) -> bool:
+  if not origin:
+    return False
+  if settings.CORS_ORIGINS == "*":
+    return True
+  if origin in _origins:
+    return True
+  import re
+  return re.fullmatch(_SMARTSEEN_ORIGIN_RE, origin) is not None
+
+
 app.add_middleware(MonitoringMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 # Capture request-scoped context (e.g. IP) early
@@ -66,7 +81,8 @@ app.add_middleware(TenantContextMiddleware)
 # Last registered = outermost = runs first on the request (handles preflight before other middleware).
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=_origins,
+  allow_origins=_origins if _origins != ["*"] else ["*"],
+  allow_origin_regex=_SMARTSEEN_ORIGIN_RE if _origins != ["*"] else None,
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],
@@ -98,18 +114,11 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 def _cors_headers_for_request(request: Request) -> dict[str, str]:
   """So browser-visible 500s still expose ACAO when credentialed XHR is used."""
   origin = request.headers.get("origin")
-  if not origin:
+  if not _origin_allowed(origin):
     return {}
-  if settings.CORS_ORIGINS == "*":
-    return {}
-  allowed = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
-  if not allowed:
-    _default = Settings.model_fields["CORS_ORIGINS"].default
-    allowed = [o.strip() for o in str(_default).split(",") if o.strip()]
-  if origin not in allowed:
-    return {}
+  # Reflect the request origin (required when allow_credentials=True).
   return {
-    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Origin": origin or "",
     "Access-Control-Allow-Credentials": "true",
   }
 
