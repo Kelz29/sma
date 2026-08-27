@@ -97,6 +97,7 @@ class Invoice(Base):
   invoice_number: Mapped[int] = mapped_column(Integer, nullable=False)
   customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
   customer_email: Mapped[str | None] = mapped_column(String(255))
+  description: Mapped[str | None] = mapped_column(String(255), nullable=True)  # document subject / summary
 
   issue_date: Mapped[datetime] = mapped_column(Date, nullable=False)
   due_date: Mapped[datetime | None] = mapped_column(Date)

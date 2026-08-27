@@ -95,3 +95,29 @@ def test_invoices_discount_percent(client: TestClient, auth_headers: dict) -> No
   assert float(data["discount_percent"]) == 10.0
   assert abs(float(data["vat_amount"]) - 135.0) < 0.01
   assert abs(float(data["total"]) - 1035.0) < 0.01
+
+
+def test_invoices_description_roundtrip(client: TestClient, auth_headers: dict) -> None:
+  payload = {
+    "customer_name": "Acme Inc",
+    "description": "Website rebuild – phase 2",
+    "issue_date": "2025-03-01",
+    "currency": "ZAR",
+    "lines": [{"description": "Development", "quantity": 1, "unit_price": 500}],
+  }
+  r = client.post("/api/v1/invoices/", json=payload, headers=auth_headers)
+  assert r.status_code == 201
+  data = r.json()
+  assert data["description"] == "Website rebuild – phase 2"
+  inv_id = data["id"]
+
+  r2 = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={
+      "description": "Website rebuild – phase 2 (revised)",
+      "lines": [{"description": "Development", "quantity": 1, "unit_price": 500}],
+    },
+    headers=auth_headers,
+  )
+  assert r2.status_code == 200
+  assert r2.json()["description"] == "Website rebuild – phase 2 (revised)"

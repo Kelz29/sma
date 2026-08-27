@@ -1,0 +1,7 @@
+# Root ignore — keep upload artefacts and local env out of git.
+cpanel/
+.env
+.env.*
+!.env.example
+**/.DS_Store
+*.log

@@ -198,15 +198,15 @@ export function ContractsPage() {
                 {contracts.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                     <td className="py-3 pl-4 font-medium text-slate-800 dark:text-slate-200">{c.title}</td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.party_name ?? "—"}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.party_name ?? ""}</td>
                     <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                      {c.start_date ?? "—"} {c.end_date ? `→ ${c.end_date}` : ""}
+                      {c.start_date ?? ""} {c.end_date ? `→ ${c.end_date}` : ""}
                     </td>
                     <td className="py-3 px-4">
                       <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{c.status}</span>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-200">
-                      {c.value != null ? formatAmount(c.value, c.currency ?? "ZAR") : "—"}
+                      {c.value != null ? formatAmount(c.value, c.currency ?? "ZAR") : ""}
                     </td>
                     <td className="py-3 pr-4 text-right">
                       {c.document_url && (
@@ -243,7 +243,7 @@ export function ContractsPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Lead</label>
                 <select {...register("lead_id")} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  <option value="">— None —</option>
+                  <option value="">None</option>
                   {(leads ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </div>

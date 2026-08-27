@@ -23,7 +23,7 @@ function useLanding() {
       const res = await api.get<LandingData>("/landing");
       return res.data;
     },
-    // Show counter even if API fails (e.g. backend not running) – use defaults so design is visible
+    // Show counter even if API fails (e.g. backend not running); use defaults so design is visible
     retry: false,
   });
 }
@@ -257,10 +257,10 @@ export function LandingPage() {
               <p className="mb-4 inline-flex items-center rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/40">
                 Accounting, HR, payroll &amp; employee recognition in one place
               </p>
-              {/* Promo: first 50 businesses – counter always visible */}
+              {/* Promo: first 50 businesses; counter always visible */}
               <div className="mb-6 w-full max-w-sm rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 shadow-lg ring-1 ring-amber-500/20">
                 <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">
-                  Limited offer — free SmartSeen for the first {totalSlots} businesses
+                  Limited offer: free SmartSeen for the first {totalSlots} businesses
                 </p>
                 <div className="mt-3 flex items-center justify-center gap-2">
                   <span className="text-4xl font-bold tabular-nums leading-none text-amber-400">
@@ -269,7 +269,7 @@ export function LandingPage() {
                   <span className="text-lg font-medium leading-tight text-slate-300">spots left</span>
                 </div>
                 <p className="mt-2 text-xs text-slate-400">
-                  Secure your spot — register today
+                  Secure your spot: register today
                 </p>
               </div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">

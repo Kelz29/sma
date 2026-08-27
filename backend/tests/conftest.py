@@ -40,6 +40,19 @@ def override_get_db() -> Generator:
     db.close()
 
 
+@pytest.fixture(autouse=True)
+def _clear_auth_rate_limits() -> None:
+  """Avoid cross-test 429s from shared in-memory auth rate limiter."""
+  from app.core import redis_like
+  from app.utils.rate_limit import _store
+
+  redis_like.clear()
+  _store.clear()
+  yield
+  redis_like.clear()
+  _store.clear()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_database() -> None:
   # Ensure we are using SQLite for tests.
@@ -103,17 +116,30 @@ def superadmin_headers(client: TestClient) -> dict:
       db.add(tenant)
       db.commit()
       db.refresh(tenant)
+    else:
+      # Status-patch tests may leave tenant suspended if interrupted.
+      from app.db.models.tenant import TenantStatus
+
+      if getattr(tenant, "status", None) == TenantStatus.suspended:
+        tenant.status = TenantStatus.active
+        db.commit()
     user = db.query(User).filter(User.email == "superadmin@test.com").first()
+    password_hash = get_password_hash("Password123!")
     if not user:
       user = User(
         email="superadmin@test.com",
         full_name="Super Admin",
-        hashed_password=get_password_hash("Password123!"),
+        hashed_password=password_hash,
         is_active=True,
       )
       db.add(user)
       db.commit()
       db.refresh(user)
+    else:
+      # Admin reset-password tests may change this; keep fixture login stable.
+      user.hashed_password = password_hash
+      user.is_active = True
+      db.commit()
     tu = (
       db.query(TenantUser)
       .filter(TenantUser.tenant_id == tenant.id, TenantUser.user_id == user.id)

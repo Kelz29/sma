@@ -103,6 +103,7 @@ if getattr(settings, "USE_SQLITE", False):
       ("discount_type", "VARCHAR(20)"),
       ("discount_percent", "REAL"),
       ("discount_amount", "REAL DEFAULT 0"),
+      ("description", "VARCHAR(255)"),
     ]:
       try:
         conn.execute(text(f"ALTER TABLE invoices ADD COLUMN {col} {typ}"))
@@ -174,6 +175,7 @@ else:
       "ALTER TABLE invoices ADD COLUMN discount_type VARCHAR(20) NULL",
       "ALTER TABLE invoices ADD COLUMN discount_percent DOUBLE NULL",
       "ALTER TABLE invoices ADD COLUMN discount_amount DOUBLE NULL DEFAULT 0",
+      "ALTER TABLE invoices ADD COLUMN description VARCHAR(255) NULL",
     ]:
       try:
         conn.execute(text(stmt))

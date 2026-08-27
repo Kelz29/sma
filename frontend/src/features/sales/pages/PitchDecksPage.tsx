@@ -144,8 +144,8 @@ export function PitchDecksPage() {
     }
   };
 
-  const getLeadName = (id: number | null) => (id == null ? "—" : leads?.find((l) => l.id === id)?.name ?? `Lead #${id}`);
-  const getDealName = (id: number | null) => (id == null ? "—" : deals?.find((d) => d.id === id)?.name ?? `Deal #${id}`);
+  const getLeadName = (id: number | null) => (id == null ? "" : leads?.find((l) => l.id === id)?.name ?? `Lead #${id}`);
+  const getDealName = (id: number | null) => (id == null ? "" : deals?.find((d) => d.id === id)?.name ?? `Deal #${id}`);
 
   return (
     <div className="space-y-6">
@@ -220,14 +220,14 @@ export function PitchDecksPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Lead</label>
                 <select {...register("lead_id")} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  <option value="">— None —</option>
+                  <option value="">None</option>
                   {(leads ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Deal</label>
                 <select {...register("deal_id")} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
-                  <option value="">— None —</option>
+                  <option value="">None</option>
                   {(deals ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>

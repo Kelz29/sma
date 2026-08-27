@@ -170,8 +170,8 @@ export function BankingPage() {
                   className="w-full rounded-md border px-2 py-1.5 text-sm bg-background"
                   {...registerAccount("currency")}
                 >
-                  <option value="ZAR">ZAR — South African Rand</option>
-                  <option value="LSL">LSL — Lesotho Loti</option>
+                  <option value="ZAR">ZAR: South African Rand</option>
+                  <option value="LSL">LSL: Lesotho Loti</option>
                 </select>
               </div>
               <div>
@@ -293,7 +293,7 @@ export function BankingPage() {
                       <td className="py-2 pr-4 text-slate-800 dark:text-slate-200">{tx.description}</td>
                       <td className="py-2 pr-4 text-right font-medium text-slate-800 dark:text-slate-200">{tx.amount.toFixed(2)}</td>
                       <td className="py-2 pr-4 text-right text-slate-600 dark:text-slate-400">
-                        {tx.balance_after ? tx.balance_after.toFixed(2) : "-"}
+                        {tx.balance_after ? tx.balance_after.toFixed(2) : ""}
                       </td>
                       <td className="py-2 pr-4 text-xs text-slate-600 dark:text-slate-400">
                         {tx.is_reconciled ? "Yes" : "No"}

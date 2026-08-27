@@ -9,10 +9,10 @@ describe("Topbar", () => {
     useAuthStore.getState().clearAuth();
   });
 
-  it("renders header with company switcher and user menu", () => {
+  it("renders header with theme toggle and logout", () => {
     render(<Topbar />);
-    expect(screen.getByText("Demo Company")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /user menu/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /theme/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /logout/i })).toBeInTheDocument();
   });
 
   it("logs out and clears auth state when Logout is clicked", async () => {

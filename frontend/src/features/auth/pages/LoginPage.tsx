@@ -183,7 +183,7 @@ export function LoginPage() {
                   name="tenant_slug"
                   required
                   className="block w-full rounded-xl border border-white/20 bg-slate-800/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/30 outline-none"
-                  placeholder="e.g. my-company"
+                  placeholder="e.g. mycompany"
                 />
               </div>
 

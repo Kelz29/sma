@@ -172,14 +172,14 @@ export function DashboardPage() {
           sublabel="Due & overdue"
         />
         <DashboardStat
-          label="Month-to-date expenses"
+          label="Month to date expenses"
           value={formatAmount(monthExpenses, BASE_CURRENCY_CODE, { decimals: 0, useSymbol: true })}
           sublabel="Approved spend"
         />
         <DashboardStat
           label="Net this month"
           value={formatAmount(monthRevenue - monthExpenses, BASE_CURRENCY_CODE, { decimals: 0, useSymbol: true })}
-          sublabel="Revenue - expenses"
+          sublabel="Revenue less expenses"
         />
       </section>
 
@@ -264,7 +264,7 @@ export function DashboardPage() {
                           tx.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                         }
                       >
-                        {tx.amount >= 0 ? "+" : "-"}
+                        {tx.amount >= 0 ? "+" : ""}
                         {formatAmount(Math.abs(tx.amount), bankAccounts?.[0]?.currency ?? BASE_CURRENCY_CODE, { useSymbol: true })}
                       </span>
                     </div>

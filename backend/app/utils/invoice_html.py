@@ -24,6 +24,15 @@ def _fmt_num(n: float | None) -> str:
   return f"{float(n):,.2f}"
 
 
+def _doc_description_html(title: str | None, *, color: str = "#555555", size: str = "13px") -> str:
+  text = (title or "").strip()
+  if not text:
+    return ""
+  return (
+    f'<p style="margin:6px 0 0;font-size:{size};color:{color};line-height:1.4;font-weight:500">{text}</p>'
+  )
+
+
 def _line_density(lines: list[dict] | None) -> dict:
   """Scale the whole document down when an invoice has many line items.
 
@@ -74,8 +83,6 @@ def _head_css(density: dict) -> str:
   d = density
   compact = d["level"] != "normal"
 
-  # For dense invoices scale the whole page down together and use the full
-  # printable width, so the line table stays in proportion with everything else.
   scale_css = ""
   if compact:
     scale_css = f"""
@@ -86,18 +93,12 @@ def _head_css(density: dict) -> str:
     font-size: {d['body_font']} !important;
   }}
   .inv-totals {{
-    width: 300px !important;
-    margin-left: auto !important;
-    margin-right: 0 !important;
-    padding: 10px 14px !important;
     font-size: {d['totals_font']} !important;
   }}
-  .inv-totals p, .inv-totals div, .inv-totals td, .inv-totals span {{
+  .inv-totals td {{
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
     font-size: {d['totals_font']} !important;
-  }}
-  .inv-totals td {{ padding: 3px 6px !important; }}
-  .inv-totals .grand, .inv-totals .grand span {{
-    font-size: {d['totals_grand']} !important;
   }}
   .inv-totals .grand td {{
     font-size: {d['totals_grand']} !important;
@@ -141,9 +142,65 @@ def _head_css(density: dict) -> str:
     white-space: nowrap;
     text-align: right;
   }}
-  .inv-totals {{ page-break-inside: avoid; break-inside: avoid; }}
+  .inv-totals {{
+    width: auto !important;
+    max-width: 100%;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }}
+  .inv-totals td {{
+    white-space: nowrap;
+    vertical-align: baseline;
+  }}
 </style>
 """
+
+
+def _totals_table(
+  *,
+  currency: str,
+  subtotal: float,
+  vat_amount: float,
+  total: float,
+  vat_rate: float | None = None,
+  discount_amount: float = 0,
+  discount_percent: float | None = None,
+  label_color: str = "#374151",
+  value_color: str = "#111827",
+  grand_color: str = "#111827",
+  rule_color: str = "#e5e7eb",
+  extra_style: str = "",
+) -> str:
+  """Right-aligned totals without floats, so amounts stay on the page in PDF."""
+  vat_label = f"VAT ({_fmt_num(vat_rate)}%)" if vat_rate else "VAT"
+  discount_row = ""
+  if discount_amount:
+    dlabel = f"Discount ({_fmt_num(discount_percent)}%)" if discount_percent else "Discount"
+    discount_row = f"""
+    <tr>
+      <td style="padding:4px 20px 4px 0;text-align:right;color:{label_color}">{dlabel}</td>
+      <td style="padding:4px 8px 4px 0;text-align:right;color:{value_color};font-weight:500">-{currency} {_fmt_num(discount_amount)}</td>
+    </tr>"""
+  return f"""
+  <table class="inv-totals" style="margin-top:20px;{extra_style}">
+    <tr>
+      <td style="padding:4px 20px 4px 0;text-align:right;color:{label_color}">Subtotal</td>
+      <td style="padding:4px 8px 4px 0;text-align:right;color:{value_color};font-weight:500">{currency} {_fmt_num(subtotal)}</td>
+    </tr>
+    {discount_row}
+    <tr>
+      <td style="padding:4px 20px 4px 0;text-align:right;color:{label_color}">{vat_label}</td>
+      <td style="padding:4px 8px 4px 0;text-align:right;color:{value_color};font-weight:500">{currency} {_fmt_num(vat_amount)}</td>
+    </tr>
+    <tr class="grand">
+      <td style="padding:10px 20px 4px 0;text-align:right;color:{grand_color};font-weight:700;border-top:1px solid {rule_color}">Total</td>
+      <td style="padding:10px 8px 4px 0;text-align:right;color:{grand_color};font-weight:700;border-top:1px solid {rule_color}">{currency} {_fmt_num(total)}</td>
+    </tr>
+  </table>
+  """
 
 
 def _lines_colgroup(four_cols: bool = True) -> str:
@@ -428,6 +485,7 @@ def _theme_classic(
     </tr>
   </table>
   <h2 style="margin-top:28px;border-bottom:1px solid {primary_color};padding-bottom:6px;font-size:18px">{doc_label} #{doc_number}</h2>
+  {_doc_description_html(title, color="#555")}
   <table style="width:100%;margin-top:20px">
     <tr>
       <td style="width:50%;vertical-align:top">
@@ -451,12 +509,7 @@ def _theme_classic(
     </tr></thead>
     <tbody>{rows}</tbody>
   </table>
-  <table class="inv-totals" style="width:100%;margin-top:16px;border-collapse:collapse">
-    <tr><td style="padding:8px;text-align:right">Subtotal</td><td style="text-align:right;width:120px">{currency} {_fmt_num(subtotal)}</td></tr>
-    {f'<tr><td style="padding:8px;text-align:right">Discount{f" ({_fmt_num(discount_percent)}%)" if discount_percent else ""}</td><td style="text-align:right">-{currency} {_fmt_num(discount_amount)}</td></tr>' if discount_amount else ''}
-    <tr><td style="padding:8px;text-align:right">VAT{f' ({_fmt_num(vat_rate)}%)' if vat_rate else ''}</td><td style="text-align:right">{currency} {_fmt_num(vat_amount)}</td></tr>
-    <tr class="grand" style="font-weight:bold;font-size:1.1em"><td style="padding:12px 8px;text-align:right">Total</td><td style="text-align:right">{currency} {_fmt_num(total)}</td></tr>
-  </table>
+  {_totals_table(currency=currency, subtotal=subtotal, vat_amount=vat_amount, total=total, vat_rate=vat_rate, discount_amount=discount_amount, discount_percent=discount_percent)}
   {f'<div style="margin-top:24px;padding:12px;background:#f9f9f9;border-left:4px solid {primary_color}"><p style="margin:0;color:#555;font-size:13px"><strong>Notes</strong><br/>{notes}</p></div>' if notes else ''}
   {payment_html}
   {banking_html}
@@ -509,22 +562,25 @@ def _theme_modern(
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"/><title>{doc_label} #{doc_number}</title>{_head_css(density or _line_density(lines))}</head>
-<body style="font-family:'Segoe UI',system-ui,sans-serif;max-width:720px;margin:0 auto;padding:0;color:#111827;background:#fff">
-  <div style="background:linear-gradient(135deg,{primary_color} 0%,{secondary_color} 100%);color:#fff;padding:28px 32px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-    <div style="display:flex;align-items:center;gap:16px">
-      <div style="background:rgba(255,255,255,0.2);padding:8px;border-radius:8px">{_logo_img(logo_url, 44)}</div>
-      <div>
-        <div style="font-size:11px;opacity:0.9;text-transform:uppercase;letter-spacing:0.08em">{doc_label}</div>
-        <h1 style="margin:4px 0 0;font-size:24px;font-weight:700">#{str(doc_number).zfill(5)}</h1>
+<body style="font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:0;color:#111827;background:#fff">
+  <div style="background:linear-gradient(135deg,{primary_color} 0%,{secondary_color} 100%);color:#fff;padding:22px 24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="background:rgba(255,255,255,0.2);padding:8px;border-radius:8px">{_logo_img(logo_url, 44)}</div>
+        <div>
+          <div style="font-size:11px;opacity:0.9;text-transform:uppercase;letter-spacing:0.08em">{doc_label}</div>
+          <h1 style="margin:4px 0 0;font-size:24px;font-weight:700">#{str(doc_number).zfill(5)}</h1>
+          {_doc_description_html(title, color="rgba(255,255,255,0.9)", size="13px")}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:600">{company_name}</div>
+        {f'<div style="font-size:11px;opacity:0.9;margin-top:4px">{company_address}</div>' if company_address else ''}
       </div>
     </div>
-    <div style="text-align:right">
-      <div style="font-size:14px;font-weight:600">{company_name}</div>
-      {f'<div style="font-size:11px;opacity:0.9;margin-top:4px">{company_address}</div>' if company_address else ''}
-    </div>
   </div>
-  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;margin-bottom:28px">
+  <div style="padding:20px 8px 8px">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;margin-bottom:20px">
       <div>
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;margin-bottom:4px">Bill to</div>
         <div style="font-weight:600;font-size:15px">{customer_name}</div>
@@ -547,12 +603,7 @@ def _theme_modern(
       </tr></thead>
       <tbody>{rows}</tbody>
     </table>
-    <div class="inv-totals" style="margin-top:24px;text-align:right;background:#f9fafb;padding:20px 24px;border-radius:8px">
-      <div style="margin-bottom:8px">Subtotal <span style="float:right;font-weight:500">{currency} {_fmt_num(subtotal)}</span></div>
-      {f'<div style="margin-bottom:8px">Discount{f" ({_fmt_num(discount_percent)}%)" if discount_percent else ""} <span style="float:right;font-weight:500">-{currency} {_fmt_num(discount_amount)}</span></div>' if discount_amount else ''}
-      <div style="margin-bottom:8px">VAT <span style="float:right;font-weight:500">{currency} {_fmt_num(vat_amount)}</span></div>
-      <div class="grand" style="font-size:18px;font-weight:700;margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb">Total <span style="float:right">{currency} {_fmt_num(total)}</span></div>
-    </div>
+    {_totals_table(currency=currency, subtotal=subtotal, vat_amount=vat_amount, total=total, vat_rate=vat_rate, discount_amount=discount_amount, discount_percent=discount_percent, extra_style="background:#f9fafb;border-radius:8px")}
     {f'<div style="margin-top:24px;padding:16px;background:#f0fdf4;border-radius:8px;border-left:4px solid {primary_color}"><p style="margin:0;color:#166534;font-size:13px"><strong>Notes</strong><br/>{notes}</p></div>' if notes else ''}
     {payment_html}
     {banking_html}
@@ -608,7 +659,8 @@ def _theme_minimal(
       {f'<div style="font-size:11px;color:#666;margin-top:4px">{company_address}</div>' if company_address else ''}
     </div>
   </div>
-  <p style="font-size:11px;color:#888;margin-bottom:24px">{doc_label} #{doc_number} · {_fmt_date(issue_date)}</p>
+  <p style="font-size:11px;color:#888;margin-bottom:8px">{doc_label} #{doc_number} · {_fmt_date(issue_date)}</p>
+  {_doc_description_html(title, color="#333", size="14px")}
   <p style="font-weight:600;margin-bottom:2px">{customer_name}</p>
   {f'<p style="color:#666;margin-bottom:20px;font-size:13px">{customer_email}</p>' if customer_email else ''}{bill_to_extra}
   <table class="inv-lines" style="width:100%;margin:16px 0;border-collapse:collapse">
@@ -682,6 +734,7 @@ def _theme_elegant(
     </div>
     <div style="text-align:right">
       <p style="margin:0;font-size:14px"><strong>{doc_label}</strong> <span style="color:{primary_color}">#{str(doc_number).zfill(5)}</span></p>
+      {_doc_description_html(title, color="#5a534d")}
       <p style="margin:12px 0 0;font-size:13px">Issue: {_fmt_date(issue_date)}</p>
       <p style="margin:4px 0 0;font-size:13px">Due: {_fmt_date(due_date)}</p>
     </div>
@@ -696,12 +749,7 @@ def _theme_elegant(
     </tr></thead>
     <tbody>{rows}</tbody>
   </table>
-  <div class="inv-totals" style="margin-top:28px;text-align:right;padding:20px 24px;background:#f5f1eb;border-radius:4px">
-    <p style="margin:0 0 8px">Subtotal <span style="margin-left:16px;font-weight:500">{currency} {_fmt_num(subtotal)}</span></p>
-    {f'<p style="margin:0 0 8px">Discount{f" ({_fmt_num(discount_percent)}%)" if discount_percent else ""} <span style="margin-left:16px;font-weight:500">-{currency} {_fmt_num(discount_amount)}</span></p>' if discount_amount else ''}
-    <p style="margin:0 0 8px">VAT <span style="margin-left:16px;font-weight:500">{currency} {_fmt_num(vat_amount)}</span></p>
-    <p class="grand" style="margin:12px 0 0;font-size:18px;font-weight:600">Total <span style="margin-left:16px">{currency} {_fmt_num(total)}</span></p>
-  </div>
+  {_totals_table(currency=currency, subtotal=subtotal, vat_amount=vat_amount, total=total, vat_rate=vat_rate, discount_amount=discount_amount, discount_percent=discount_percent, label_color="#5a534d", value_color="#2c2825", grand_color="#2c2825", rule_color="#e8e4e0", extra_style="background:#f5f1eb;padding:8px 16px;border-radius:4px")}
   {f'<div style="margin-top:28px;padding:18px;background:#faf9f7;border:1px solid #e8e4e0;border-radius:4px"><p style="margin:0;color:#5a534d;font-size:13px;line-height:1.6"><strong>Notes</strong><br/>{notes}</p></div>' if notes else ''}
   {payment_html}
   {banking_html}
@@ -767,6 +815,7 @@ def _theme_bold(
       <div style="text-align:right">
         <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.1em">{doc_label}</div>
         <div style="font-size:28px;font-weight:800;color:{secondary_color}">#{str(doc_number).zfill(5)}</div>
+        {_doc_description_html(title, color="#d1d5db")}
       </div>
     </div>
   </div>
@@ -792,12 +841,7 @@ def _theme_bold(
       </tr></thead>
       <tbody>{rows}</tbody>
     </table>
-    <div class="inv-totals" style="margin-top:24px;text-align:right;padding:24px;background:#1f2937;border-radius:8px;border:1px solid #374151">
-      <p style="margin:0 0 8px;color:#9ca3af">Subtotal <span style="float:right;font-weight:500;color:#fff">{currency} {_fmt_num(subtotal)}</span></p>
-      {f'<p style="margin:0 0 8px;color:#9ca3af">Discount{f" ({_fmt_num(discount_percent)}%)" if discount_percent else ""} <span style="float:right;font-weight:500;color:#fff">-{currency} {_fmt_num(discount_amount)}</span></p>' if discount_amount else ''}
-      <p style="margin:0 0 8px;color:#9ca3af">VAT <span style="float:right;font-weight:500;color:#fff">{currency} {_fmt_num(vat_amount)}</span></p>
-      <p class="grand" style="margin:16px 0 0;font-size:20px;font-weight:700;color:{secondary_color}">Total <span style="float:right">{currency} {_fmt_num(total)}</span></p>
-    </div>
+    {_totals_table(currency=currency, subtotal=subtotal, vat_amount=vat_amount, total=total, vat_rate=vat_rate, discount_amount=discount_amount, discount_percent=discount_percent, label_color="#9ca3af", value_color="#ffffff", grand_color=secondary_color, rule_color="#374151", extra_style="background:#1f2937;padding:8px 16px;border-radius:8px;border:1px solid #374151")}
     {f'<div style="margin-top:24px;padding:18px;background:#1f2937;border-radius:8px;border-left:4px solid {primary_color}"><p style="margin:0;color:#d1d5db;font-size:13px;line-height:1.6"><strong>Notes</strong><br/>{notes}</p></div>' if notes else ''}
     {payment_html}
     {banking_html}
@@ -863,6 +907,7 @@ def _theme_professional(
     <div style="text-align:right">
       <div style="font-size:11px;opacity:0.9;text-transform:uppercase">{doc_label}</div>
       <div style="font-size:22px;font-weight:700">#{str(doc_number).zfill(5)}</div>
+      {_doc_description_html(title, color="rgba(255,255,255,0.9)")}
     </div>
   </div>
   <div style="padding:36px;border:1px solid #e2e8f0;border-top:none">
@@ -887,12 +932,7 @@ def _theme_professional(
       </tr></thead>
       <tbody>{rows}</tbody>
     </table>
-    <div class="inv-totals" style="margin-top:24px;text-align:right;background:#f8fafc;padding:20px 24px;border-radius:6px;border:1px solid #e2e8f0">
-      <p style="margin:0 0 8px;color:#64748b">Subtotal <span style="float:right;font-weight:600;color:#1e293b">{currency} {_fmt_num(subtotal)}</span></p>
-      {f'<p style="margin:0 0 8px;color:#64748b">Discount{f" ({_fmt_num(discount_percent)}%)" if discount_percent else ""} <span style="float:right;font-weight:600;color:#1e293b">-{currency} {_fmt_num(discount_amount)}</span></p>' if discount_amount else ''}
-      <p style="margin:0 0 8px;color:#64748b">VAT <span style="float:right;font-weight:600;color:#1e293b">{currency} {_fmt_num(vat_amount)}</span></p>
-      <p class="grand" style="margin:14px 0 0;font-size:18px;font-weight:700;color:{primary_color};padding-top:12px;border-top:1px solid #e2e8f0">Total <span style="float:right">{currency} {_fmt_num(total)}</span></p>
-    </div>
+    {_totals_table(currency=currency, subtotal=subtotal, vat_amount=vat_amount, total=total, vat_rate=vat_rate, discount_amount=discount_amount, discount_percent=discount_percent, label_color="#64748b", value_color="#1e293b", grand_color=primary_color, extra_style="background:#f8fafc;padding:8px 16px;border-radius:6px;border:1px solid #e2e8f0")}
     {f'<div style="margin-top:24px;padding:16px;background:#f8fafc;border-radius:6px;border-left:4px solid {primary_color}"><p style="margin:0;color:#475569;font-size:13px;line-height:1.6"><strong>Notes</strong><br/>{notes}</p></div>' if notes else ''}
     {payment_html}
     {banking_html}

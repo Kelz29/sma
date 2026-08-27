@@ -269,7 +269,7 @@ export function ExpensesPage() {
                     disabled={extractMutation.isPending}
                     className="text-sm font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
                   >
-                    Re-extract
+                    Extract again
                   </button>
                   <button
                     type="button"
@@ -307,14 +307,14 @@ export function ExpensesPage() {
                   <tr key={exp.id} className="border-b border-slate-100 last:border-none">
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{exp.date}</td>
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">
-                      {vendors?.find((v) => v.id === exp.vendor_id)?.name ?? "—"}
+                      {vendors?.find((v) => v.id === exp.vendor_id)?.name ?? ""}
                     </td>
                     <td className="py-2 pr-4 text-slate-900 dark:text-slate-100">{exp.description}</td>
                     <td className="py-2 pr-4 text-right font-medium text-slate-900 dark:text-slate-100">
                       {formatAmount(Number(exp.amount), exp.currency ?? BASE_CURRENCY_CODE)}
                     </td>
                     <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
-                      {categories?.find((c) => c.id === exp.category_id)?.name ?? "—"}
+                      {categories?.find((c) => c.id === exp.category_id)?.name ?? ""}
                     </td>
                     <td className="py-2 pr-4">
                       <span className="capitalize rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">

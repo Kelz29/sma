@@ -367,7 +367,7 @@ function ManageTenantUsersModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b pb-2">
-          <h2 className="text-lg font-semibold">Users — {tenant.name}</h2>
+          <h2 className="text-lg font-semibold">Users: {tenant.name}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -394,7 +394,7 @@ function ManageTenantUsersModal({
                 {(users ?? []).map((u) => (
                   <tr key={u.id} className="border-b">
                     <td className="py-2 font-medium">{u.email}</td>
-                    <td className="py-2 text-muted-foreground">{u.full_name ?? "—"}</td>
+                    <td className="py-2 text-muted-foreground">{u.full_name ?? ""}</td>
                     <td className="py-2">
                       <span className="rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-xs text-slate-800 dark:text-slate-200">{u.role}</span>
                       {u.is_owner && (

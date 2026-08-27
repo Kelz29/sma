@@ -260,7 +260,7 @@ export function CreateCustomerModal({
                   type="text"
                   value={vatNumber}
                   onChange={(e) => setVatNumber(e.target.value)}
-                  placeholder="If VAT-registered"
+                  placeholder="If VAT registered"
                   className={inputClass}
                 />
               </div>

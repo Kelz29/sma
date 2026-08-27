@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:cpanel": "vite build --outDir ../cpanel --emptyOutDir",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

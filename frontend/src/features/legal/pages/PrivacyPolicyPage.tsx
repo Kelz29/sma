@@ -56,7 +56,7 @@ export function PrivacyPolicyPage() {
           <section>
             <h2 className="text-lg font-semibold">4. Data storage and security</h2>
             <p>
-              Your data is stored securely. We use industry-standard measures to protect it.
+              Your data is stored securely. We use industry standard measures to protect it.
               Access tokens are used for authentication; we recommend you keep your credentials
               secure and log out on shared devices.
             </p>
@@ -65,7 +65,7 @@ export function PrivacyPolicyPage() {
             <h2 className="text-lg font-semibold">5. Cookies and local storage</h2>
             <p>
               We use local storage to keep you signed in (e.g. authentication state). We do not
-              use cookies for tracking or advertising. If we introduce non-essential cookies in the
+              use cookies for tracking or advertising. If we introduce non essential cookies in the
               future, we will ask for your consent where required by law.
             </p>
           </section>
