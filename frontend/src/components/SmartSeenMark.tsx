@@ -8,7 +8,7 @@ type Props = ComponentPropsWithoutRef<"svg"> & {
 };
 
 /**
- * SmartSeen mark – built from the fused rounded bars and lime band.
+ * SmartSeen mark: built from the fused rounded bars and lime band.
  * Based on the SmartSeen logo suite (on black/app icon variant).
  */
 export function SmartSeenMark({ className, ...rest }: Props) {

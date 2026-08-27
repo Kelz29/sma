@@ -16,7 +16,13 @@ function applyTheme(theme: Theme) {
 }
 
 function loadStoredTheme(): Theme {
-  if (typeof window === "undefined" || !window.localStorage) return "system";
+  if (
+    typeof window === "undefined" ||
+    typeof window.localStorage === "undefined" ||
+    typeof window.localStorage.getItem !== "function"
+  ) {
+    return "system";
+  }
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark" || stored === "system") return stored;
   return "system";
@@ -45,7 +51,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     resolvedDark,
     setTheme: (next: Theme) => {
       applyTheme(next);
-      if (typeof window?.localStorage !== "undefined") {
+      if (typeof window?.localStorage?.setItem === "function") {
         window.localStorage.setItem(STORAGE_KEY, next);
       }
       set({

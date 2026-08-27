@@ -286,47 +286,47 @@ export function PortalPage() {
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Email</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.email ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.email ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">ID number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.id_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.id_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Passport number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Tax number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Department</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.department ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.department ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Job title</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.job_title ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.job_title ?? ""}</dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs font-medium text-slate-500 uppercase">Address</dt>
-                      <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Phone</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.phone ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.phone ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Bank name</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Bank account number</dt>
-                      <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Branch code</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? ""}</dd>
                     </div>
                   </dl>
                 ) : (
@@ -481,8 +481,8 @@ export function PortalPage() {
                   {attendance.map((a) => (
                     <tr key={a.id}>
                       <td className="py-2 pl-4">{a.date}</td>
-                      <td className="py-2 px-4">{a.check_in ?? "—"}</td>
-                      <td className="py-2 px-4">{a.check_out ?? "—"}</td>
+                      <td className="py-2 px-4">{a.check_in ?? ""}</td>
+                      <td className="py-2 px-4">{a.check_out ?? ""}</td>
                       <td className="py-2 pr-4">
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 capitalize">{a.status}</span>
                       </td>
@@ -536,7 +536,7 @@ export function PortalPage() {
                 <tbody className="divide-y divide-slate-100">
                   {payslips.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/50">
-                      <td className="py-3 pl-4 text-slate-600">{p.period_start} – {p.period_end}</td>
+                      <td className="py-3 pl-4 text-slate-600">{p.period_start} to {p.period_end}</td>
                       <td className="py-3 px-4 text-right text-slate-800">{formatAmount(Number(p.gross), p.currency)}</td>
                       <td className="py-3 px-4 text-right font-medium text-slate-900">{formatAmount(Number(p.net), p.currency)}</td>
                       <td className="py-3 pr-4 text-right">

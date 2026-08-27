@@ -31,9 +31,9 @@ describe("HRPage", () => {
     expect(screen.getByRole("button", { name: /Attendance/i })).toBeInTheDocument();
   });
 
-  it("renders employees tab by default with Add employee button", () => {
+  it("renders employees tab by default with Add employee button", async () => {
     render(<HRPage />);
     expect(screen.getByRole("button", { name: /\+ Add employee/i })).toBeInTheDocument();
-    expect(screen.getByText(/No employees yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No employees yet/i)).toBeInTheDocument();
   });
 });

@@ -29,6 +29,10 @@ if [[ -f "$REPO/deploy/deploy.sh" ]]; then
   cp "$REPO/deploy/deploy.sh" "$ROOT/deploy.sh"
   chmod +x "$ROOT/deploy.sh"
 fi
+if [[ -f "$REPO/deploy/start-ngrok-sma-tunnel.sh" ]]; then
+  cp "$REPO/deploy/start-ngrok-sma-tunnel.sh" "$ROOT/start-ngrok-sma-tunnel.sh"
+  chmod +x "$ROOT/start-ngrok-sma-tunnel.sh"
+fi
 
 # Preserve secrets + venv
 rsync -a --delete \
@@ -78,8 +82,9 @@ curl -sf -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:8083/health ||
   exit 1
 }
 
-# Re-attach ngrok SMA tunnel if helper exists
+# Re-attach / report SMA ngrok URL (pm2 restart alone does not change this)
 if [[ -x "$ROOT/start-ngrok-sma-tunnel.sh" ]]; then
+  echo "ngrok:"
   "$ROOT/start-ngrok-sma-tunnel.sh" || true
 fi
 

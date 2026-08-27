@@ -170,7 +170,7 @@ def preview_invoice_html(
   secondary_color = getattr(tenant, "secondary_color", None) if tenant else None
 
   html = build_invoice_html(
-    title="",
+    title="Consulting services – Q1",
     doc_number=SAMPLE_PREVIEW["doc_number"],
     customer_name=SAMPLE_PREVIEW["customer_name"],
     customer_email=SAMPLE_PREVIEW["customer_email"],
@@ -259,6 +259,7 @@ def create_invoice(
     invoice_number=doc_number,
     customer_name=customer_name,
     customer_email=customer_email,
+    description=(payload.description or "").strip() or None,
     issue_date=payload.issue_date,
     due_date=payload.due_date,
     currency=payload.currency,
@@ -347,6 +348,7 @@ def update_invoice(
   before = {
     "customer_name": invoice.customer_name,
     "customer_email": invoice.customer_email,
+    "description": invoice.description,
     "issue_date": str(invoice.issue_date),
     "due_date": str(invoice.due_date) if invoice.due_date else None,
     "currency": invoice.currency,
@@ -368,6 +370,8 @@ def update_invoice(
     invoice.customer_name = payload.customer_name
   if payload.customer_email is not None:
     invoice.customer_email = payload.customer_email
+  if payload.description is not None:
+    invoice.description = payload.description.strip() or None
   if payload.issue_date is not None:
     invoice.issue_date = payload.issue_date
   if payload.due_date is not None:
@@ -652,6 +656,7 @@ def duplicate_invoice(
     invoice_number=doc_number,
     customer_name=invoice.customer_name,
     customer_email=invoice.customer_email,
+    description=invoice.description,
     issue_date=invoice.issue_date,
     due_date=invoice.due_date,
     currency=invoice.currency,
@@ -778,7 +783,7 @@ def _invoice_to_html(invoice: Invoice, theme: str, doctype: str, tenant: Tenant 
       .first()
     )
   return build_invoice_html(
-    title="",
+    title=(invoice.description or "").strip(),
     doc_number=invoice.invoice_number,
     customer_name=invoice.customer_name,
     customer_email=invoice.customer_email,

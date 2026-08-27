@@ -122,6 +122,7 @@ class LineItemTemplateRead(BaseModel):
 class InvoiceBase(BaseModel):
   customer_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
   customer_email: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  description: Optional[constr(strip_whitespace=True, max_length=255)] = None
   issue_date: date
   due_date: Optional[date] = None
   currency: constr(strip_whitespace=True, max_length=3) = "ZAR"
@@ -138,6 +139,7 @@ class InvoiceCreate(BaseModel):
   customer_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
   customer_email: Optional[constr(strip_whitespace=True, max_length=255)] = None
   invoice_number: Optional[int] = None  # If set, use this; otherwise auto-increment per tenant
+  description: Optional[constr(strip_whitespace=True, max_length=255)] = None
   issue_date: date
   due_date: Optional[date] = None
   currency: constr(strip_whitespace=True, max_length=3) = "ZAR"
@@ -155,6 +157,7 @@ class InvoiceCreate(BaseModel):
 class InvoiceUpdate(BaseModel):
   customer_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
   customer_email: Optional[constr(strip_whitespace=True, max_length=255)] = None
+  description: Optional[constr(strip_whitespace=True, max_length=255)] = None
   issue_date: Optional[date] = None
   due_date: Optional[date] = None
   currency: Optional[constr(strip_whitespace=True, max_length=3)] = None

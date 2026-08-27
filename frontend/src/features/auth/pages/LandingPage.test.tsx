@@ -12,7 +12,7 @@ describe("LandingPage", () => {
 
   it("renders Create an account and Sign in CTA links", () => {
     render(<LandingPage />);
-    expect(screen.getByRole("link", { name: /create an account/i })).toHaveAttribute("href", "/register");
+    expect(screen.getByRole("link", { name: /claim your free spot/i })).toHaveAttribute("href", "/register");
     expect(screen.getByRole("link", { name: /sign in/i })).toHaveAttribute("href", "/login");
   });
 });

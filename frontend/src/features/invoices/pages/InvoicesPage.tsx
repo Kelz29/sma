@@ -44,6 +44,7 @@ const invoiceSchema = z.object({
   customer_name: z.string().optional(),
   customer_email: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional().or(z.literal(""))),
   invoice_number: z.preprocess(emptyToUndef, z.coerce.number().int().positive().optional().nullable()),
+  description: z.preprocess((v) => (v === "" ? undefined : v), z.string().max(255).optional().nullable()),
   issue_date: z.string().min(1, "Issue date is required"),
   due_date: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   currency: z.string().min(1).default(BASE_CURRENCY_CODE),
@@ -207,6 +208,7 @@ interface InvoiceSummary {
   id: number;
   invoice_number: number;
   customer_name: string;
+  description?: string | null;
   issue_date: string;
   total: number;
   amount_paid?: number;
@@ -384,7 +386,7 @@ export function InvoicesPage() {
     },
     onSuccess: (data) => {
       // Optimistically add the new customer so the invoice form's select has an option for it
-      // (otherwise the select has no matching option and can reset to "One-time customer" on submit)
+      // (otherwise the select has no matching option and can reset to "One time customer" on submit)
       queryClient.setQueryData<CustomerOption[]>(["customers"], (old) =>
         old ? [...old, data].sort((a, b) => a.name.localeCompare(b.name)) : [data]
       );
@@ -411,6 +413,9 @@ export function InvoicesPage() {
         is_recurring: values.is_recurring ?? false,
         lines,
       };
+      if (values.description != null && String(values.description).trim()) {
+        payload.description = String(values.description).trim();
+      }
       if (values.due_date && String(values.due_date).trim()) {
         payload.due_date = values.due_date;
       }
@@ -464,6 +469,9 @@ export function InvoicesPage() {
         issue_date: values.issue_date,
         currency: values.currency ?? BASE_CURRENCY_CODE,
         is_recurring: values.is_recurring ?? false,
+        description: values.description != null && String(values.description).trim()
+          ? String(values.description).trim()
+          : "",
         lines,
       };
       if (values.due_date && String(values.due_date).trim()) {
@@ -592,6 +600,7 @@ export function InvoicesPage() {
       customer_name: "",
       customer_email: "",
       invoice_number: undefined,
+      description: "",
       currency: BASE_CURRENCY_CODE,
       issue_date: new Date().toISOString().slice(0, 10),
       due_date: "",
@@ -639,6 +648,7 @@ export function InvoicesPage() {
           customer_name: "",
           customer_email: "",
           invoice_number: undefined,
+          description: "",
           issue_date: new Date().toISOString().slice(0, 10),
           due_date: "",
           currency: BASE_CURRENCY_CODE,
@@ -704,6 +714,7 @@ export function InvoicesPage() {
       customer_name: "",
       customer_email: "",
       invoice_number: undefined,
+      description: "",
       issue_date: new Date().toISOString().slice(0, 10),
       due_date: "",
       currency: BASE_CURRENCY_CODE,
@@ -726,6 +737,7 @@ export function InvoicesPage() {
         id: number;
         customer_name: string | null;
         customer_email: string | null;
+        description: string | null;
         issue_date: string;
         due_date: string | null;
         currency: string;
@@ -756,6 +768,7 @@ export function InvoicesPage() {
         customer_id: "",
         customer_name: inv.customer_name ?? "",
         customer_email: inv.customer_email ?? "",
+        description: inv.description ?? "",
         issue_date: inv.issue_date,
         due_date: inv.due_date ?? "",
         currency: inv.currency || BASE_CURRENCY_CODE,
@@ -1003,7 +1016,7 @@ export function InvoicesPage() {
         )}
       </div>
 
-      {/* Invoices table — primary content */}
+      {/* Invoices table: primary content */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-card shadow-apple">
         {emailMessage && (
           <div
@@ -1027,6 +1040,7 @@ export function InvoicesPage() {
                 <tr>
 <th className="py-3 pl-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Number</th>
                 <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Customer</th>
+                <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Description</th>
                 <th className="py-3 px-4 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Issue date</th>
                 <th className="py-3 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</th>
                 <th className="py-3 px-4 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Paid</th>
@@ -1055,6 +1069,9 @@ export function InvoicesPage() {
                       {String(inv?.invoice_number ?? "").padStart(5, "0")}
                     </td>
                     <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{inv?.customer_name ?? ""}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-[220px] truncate" title={inv?.description ?? undefined}>
+                      {inv?.description?.trim() ? inv.description : ""}
+                    </td>
                     <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{inv?.issue_date ?? ""}</td>
                     <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-200">
                       {formatAmount(Number(inv?.total ?? 0), inv?.currency ?? BASE_CURRENCY_CODE)}
@@ -1405,7 +1422,7 @@ export function InvoicesPage() {
                     {...register("customer_id")}
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-primary"
                   >
-                    <option value="">— One-time customer (enter below) —</option>
+                    <option value="">One time customer (enter below)</option>
                     {(customers ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}{c.email ? ` · ${c.email}` : ""}
@@ -1481,6 +1498,18 @@ export function InvoicesPage() {
                 </div>
               )}
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                <input
+                  type="text"
+                  maxLength={255}
+                  placeholder="e.g. Website development, July 2026"
+                  {...register("description")}
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-primary"
+                />
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Shown on the invoice/quotation and in the list.</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Issue date *</label>
@@ -1533,7 +1562,7 @@ export function InvoicesPage() {
                         <option value="">Add from saved…</option>
                         {lineItemTemplates.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.description} — {formatAmount(Number(t.unit_price), BASE_CURRENCY_CODE)}
+                            {t.description}: {formatAmount(Number(t.unit_price), BASE_CURRENCY_CODE)}
                           </option>
                         ))}
                       </select>

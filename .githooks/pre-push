@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Pre-push: run backend + frontend tests; on success build uncommitted cpanel/ for upload.
+set -euo pipefail
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+# Skip when pushing tags only (no branch updates).
+has_branch_update=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "${local_ref:-}" ]] && continue
+  case "$local_ref" in
+    refs/heads/*) has_branch_update=1 ;;
+  esac
+done
+if [[ "$has_branch_update" -eq 0 ]]; then
+  exit 0
+fi
+
+echo "==> Backend tests"
+if [[ -x "$ROOT/backend/.venv/bin/pytest" ]]; then
+  (
+    cd "$ROOT/backend"
+    export DATABASE_URI_OVERRIDE="sqlite:///./test_sma.db"
+    export SECRET_KEY="test-secret-key-min-32-characters-long"
+    export USE_SQLITE=true
+    .venv/bin/pytest tests/ -q --tb=short
+  )
+elif command -v poetry >/dev/null 2>&1; then
+  (
+    cd "$ROOT/backend"
+    export DATABASE_URI_OVERRIDE="sqlite:///./test_sma.db"
+    export SECRET_KEY="test-secret-key-min-32-characters-long"
+    export USE_SQLITE=true
+    poetry run pytest tests/ -q --tb=short
+  )
+else
+  echo "No backend test runner found (.venv or poetry). Install deps in backend/ first." >&2
+  exit 1
+fi
+
+echo "==> Frontend tests"
+(
+  cd "$ROOT/frontend"
+  if [[ ! -d node_modules ]]; then
+    npm ci
+  fi
+  npm test
+)
+
+echo "==> Building cpanel/ (uncommitted upload bundle)"
+(
+  cd "$ROOT/frontend"
+  npm run build:cpanel
+)
+
+echo "==> Pre-push OK — cpanel/ is ready to upload (not committed)."
+exit 0

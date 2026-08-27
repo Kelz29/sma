@@ -322,7 +322,7 @@ export function SettingsPage() {
                 disabled={!isAdmin}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white disabled:bg-slate-50 disabled:text-slate-500"
               >
-                <option value="">— Not set (use per document) —</option>
+                <option value="">Not set (use per document)</option>
                 {CURRENCIES.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}

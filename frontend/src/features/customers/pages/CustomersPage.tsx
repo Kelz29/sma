@@ -171,7 +171,7 @@ function CustomerFormFields({
               value={form.vatNumber}
               onChange={(e) => setForm((f) => ({ ...f, vatNumber: e.target.value }))}
               className={inputClass}
-              placeholder="If VAT-registered"
+              placeholder="If VAT registered"
             />
           </div>
         </div>
@@ -338,10 +338,10 @@ export function CustomersPage() {
                     <td className="py-3 px-4 text-slate-600 dark:text-slate-400 capitalize">
                       {c.customer_type === "individual" ? "Individual" : "Company"}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.email ?? "—"}</td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.phone ?? "—"}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.email ?? ""}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{c.phone ?? ""}</td>
                     <td className="py-3 px-4 text-slate-600 dark:text-slate-400 text-xs">
-                      {c.vat_number || c.registration_number || c.id_number || "—"}
+                      {c.vat_number || c.registration_number || c.id_number || ""}
                     </td>
                     <td className="py-3 pr-4 text-right">
                       <div className="flex items-center justify-end gap-2">

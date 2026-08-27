@@ -132,8 +132,8 @@ export function PayslipsPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {payslips.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
-                    <td className="py-3 pl-4 font-medium text-slate-900 dark:text-slate-100">{p.employee_name ?? "—"}</td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{p.period_start} – {p.period_end}</td>
+                    <td className="py-3 pl-4 font-medium text-slate-900 dark:text-slate-100">{p.employee_name ?? ""}</td>
+                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{p.period_start} to {p.period_end}</td>
                     <td className="py-3 px-4 text-right text-slate-800 dark:text-slate-200">{formatAmount(Number(p.gross), p.currency)}</td>
                     <td className="py-3 px-4 text-right font-medium text-slate-900 dark:text-slate-100">{formatAmount(Number(p.net), p.currency)}</td>
                     <td className="py-3 pr-4 text-right">

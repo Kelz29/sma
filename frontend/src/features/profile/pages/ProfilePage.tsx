@@ -349,47 +349,47 @@ function EmployeeProfileContent({
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Email</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.email ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.email ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">ID number</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.id_number ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.id_number ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Passport number</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Tax number</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Department</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.department ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.department ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Job title</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.job_title ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.job_title ?? ""}</dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="text-xs font-medium text-slate-500 uppercase">Address</dt>
-              <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Phone</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.phone ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.phone ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Bank name</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Bank account number</dt>
-              <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Branch code</dt>
-              <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? ""}</dd>
             </div>
           </dl>
         ) : (
@@ -486,7 +486,7 @@ function UserProfileContent({
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Name</dt>
-              <dd className="mt-0.5 text-slate-900">{me.full_name ?? "—"}</dd>
+              <dd className="mt-0.5 text-slate-900">{me.full_name ?? ""}</dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-slate-500 uppercase">Email</dt>
