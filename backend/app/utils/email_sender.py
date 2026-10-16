@@ -203,6 +203,83 @@ def send_email_confirmed(*, to_email: str, full_name: str | None = None) -> None
     raise
 
 
+def send_team_invite_email(
+  *,
+  to_email: str,
+  full_name: str | None = None,
+  company_name: str | None = None,
+  tenant_slug: str | None = None,
+  role: str | None = None,
+  login_url: str | None = None,
+  temporary_password: str | None = None,
+) -> None:
+  """Invite email when an admin adds a user to their company team."""
+  subject = "You've been added to a SmartSeen team"
+  display_name = (full_name or "").strip() or "there"
+  company = (company_name or "").strip() or "your company"
+  slug = (tenant_slug or "").strip()
+  role_label = (role or "viewer").strip()
+  login = (login_url or "").strip() or "https://app.smartseen.co.za/login"
+
+  creds_html = ""
+  creds_plain = ""
+  if temporary_password:
+    creds_html = (
+      '<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:' + _EMAIL_TEXT + ';">'
+      "<strong>Sign-in details</strong><br>"
+      f"Email: {to_email}<br>"
+      f"Temporary password: {temporary_password}<br>"
+      + (f"Company slug: {slug}<br>" if slug else "")
+      + "Please change your password after your first login."
+      "</p>"
+    )
+    creds_plain = (
+      f"\nSign-in details:\nEmail: {to_email}\nTemporary password: {temporary_password}\n"
+      + (f"Company slug: {slug}\n" if slug else "")
+      + "Please change your password after your first login.\n"
+    )
+  elif slug:
+    creds_html = (
+      '<p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:' + _EMAIL_TEXT + ';">'
+      f"Use your existing SmartSeen password. Company slug: <strong>{slug}</strong>"
+      "</p>"
+    )
+    creds_plain = f"\nUse your existing SmartSeen password. Company slug: {slug}\n"
+
+  body = (
+    '<p style="margin:0;font-size:15px;line-height:1.5;color:' + _EMAIL_MUTED + ';">'
+    f"You've been added to <strong style=\"color:{_EMAIL_TEXT}\">{company}</strong> on SmartSeen "
+    f"as <strong style=\"color:{_EMAIL_TEXT}\">{role_label}</strong>."
+    "</p>"
+    + creds_html
+    + '<p style="margin:20px 0 0;font-size:14px;color:' + _EMAIL_TEXT + ';">'
+    f'<a href="{login}" style="color:{_EMAIL_PRIMARY};font-weight:600;">Open SmartSeen</a>'
+    "</p>"
+  )
+  html = _branded_shell(f"Welcome, {display_name}", body)
+  plain = (
+    f"Welcome, {display_name}.\n\n"
+    f"You've been added to {company} on SmartSeen as {role_label}.\n"
+    + creds_plain
+    + f"\nSign in: {login}\n\nPowered by Smart Macmane\n"
+  )
+
+  msg = MIMEMultipart("alternative")
+  msg["Subject"] = subject
+  msg["From"] = _from_addr()
+  msg["To"] = to_email
+  msg.attach(MIMEText(plain, "plain"))
+  msg.attach(MIMEText(html, "html"))
+
+  try:
+    _send_smtp(msg, to_email)
+    if _smtp_configured():
+      logger.info("Team invite email sent to %s", to_email)
+  except Exception as e:
+    logger.exception("Failed to send team invite to %s: %s", to_email, e)
+    raise
+
+
 def send_invoice_email(
   *,
   to_email: str,
@@ -268,6 +345,17 @@ def dispatch_outbox_payload(kind: str, to_email: str, payload: dict) -> None:
     return
   if kind == "email_confirmed":
     send_email_confirmed(to_email=to_email, full_name=payload.get("full_name"))
+    return
+  if kind == "team_invite":
+    send_team_invite_email(
+      to_email=to_email,
+      full_name=payload.get("full_name"),
+      company_name=payload.get("company_name"),
+      tenant_slug=payload.get("tenant_slug"),
+      role=payload.get("role"),
+      login_url=payload.get("login_url"),
+      temporary_password=payload.get("temporary_password"),
+    )
     return
   if kind == "invoice":
     import base64

@@ -22,6 +22,7 @@ from app.schemas.accounting import (
 )
 from app.utils.audit import log_audit
 from app.utils.invoice_html import build_invoice_html
+from app.utils.telemetry import record_action
 from app.utils.invoice_payments import (
   invoice_amount_paid,
   invoice_balance_due,
@@ -317,6 +318,13 @@ def create_invoice(
   db.commit()
   db.refresh(invoice)
   invoice = _load_invoice(db, tenant_id, invoice.id)
+  record_action(
+    action="invoice_created",
+    path="/api/v1/invoices",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   return _to_invoice_read(invoice)
 
 
@@ -346,6 +354,7 @@ def update_invoice(
     raise HTTPException(status_code=404, detail="Invoice not found")
 
   before = {
+    "invoice_number": invoice.invoice_number,
     "customer_name": invoice.customer_name,
     "customer_email": invoice.customer_email,
     "description": invoice.description,
@@ -365,6 +374,25 @@ def update_invoice(
     "vat_amount": float(invoice.vat_amount),
     "total": float(invoice.total),
   }
+
+  if payload.invoice_number is not None:
+    if payload.invoice_number < 1:
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invoice number must be a positive whole number.",
+      )
+    if payload.invoice_number != invoice.invoice_number:
+      taken = db.query(Invoice).filter(
+        Invoice.tenant_id == tenant_id,
+        Invoice.invoice_number == payload.invoice_number,
+        Invoice.id != invoice.id,
+      ).first()
+      if taken:
+        raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail=f"Invoice number {payload.invoice_number} is already used for this company.",
+        )
+      invoice.invoice_number = payload.invoice_number
 
   if payload.customer_name is not None:
     invoice.customer_name = payload.customer_name
@@ -489,6 +517,7 @@ def update_invoice(
     details=f"Updated invoice {invoice.invoice_number}",
     old_values=before,
     new_values={
+      "invoice_number": invoice.invoice_number,
       "customer_name": invoice.customer_name,
       "customer_email": invoice.customer_email,
       "issue_date": str(invoice.issue_date),
@@ -581,6 +610,13 @@ def record_invoice_payment(
   )
   db.commit()
   invoice = _load_invoice(db, tenant_id, invoice_id)
+  record_action(
+    action="payment_recorded",
+    path=f"/api/v1/invoices/{invoice_id}/payments",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   return _to_invoice_read(invoice)
 
 
@@ -855,6 +891,13 @@ def download_invoice_pdf(
   tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
   html = _invoice_to_html(invoice, theme, doctype, tenant, db)
   pdf_bytes = _render_invoice_pdf(html)
+  record_action(
+    action="invoice_pdf",
+    path=f"/api/v1/invoices/{invoice_id}/pdf",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   label = "quotation" if doctype == "quotation" else "invoice"
   headers = {"Content-Disposition": f'inline; filename="{label}-{invoice.invoice_number}.pdf"'}
   return StreamingResponse(iter([pdf_bytes]), media_type="application/pdf", headers=headers)

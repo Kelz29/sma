@@ -1,0 +1,35 @@
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Same home-server runner as the backend. Self-hosted jobs do not use
+    # GitHub-hosted minutes, so this does not need a billing plan.
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Deploy SMA frontend to cPanel
+        run: |
+          set -euo pipefail
+          ROOT="$HOME/Documents/sma"
+          REPO="$ROOT/repo"
+          mkdir -p "$ROOT/logs"
+          if [[ ! -d "$REPO/.git" ]]; then
+            git clone --branch main https://github.com/Kelz29/sma.git "$REPO"
+          fi
+          git -C "$REPO" fetch origin main
+          git -C "$REPO" checkout main
+          git -C "$REPO" reset --hard origin/main
+          install -m 755 "$REPO/deploy/deploy-frontend.sh" "$ROOT/deploy-frontend.sh"
+          "$ROOT/deploy-frontend.sh"

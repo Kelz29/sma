@@ -18,6 +18,7 @@ def test_feature_flags_list_success(client: TestClient, auth_headers: dict) -> N
     keys = [f["key"] for f in data]
     assert "dashboard" in keys
     assert "invoices" in keys
+    assert "pdf_editor" in keys
     assert "leads" in keys
 
 

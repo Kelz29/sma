@@ -45,6 +45,7 @@ if [[ -n "$PREV" && "$PREV" != "$URL" ]]; then
   echo "WARNING: ngrok URL CHANGED" >&2
   echo "  was: $PREV" >&2
   echo "  now: $URL" >&2
-  echo "Update frontend VITE_API_URL to ${URL}/api/v1 then rebuild cpanel." >&2
+  echo "Update frontend VITE_API_URL to ${URL}/api/v1." >&2
+  echo "On the home server, redeploy app.smartseen.co.za with: $ROOT/deploy-frontend.sh" >&2
   echo "$URL" > "$ROOT/ngrok-url.CHANGED"
 fi

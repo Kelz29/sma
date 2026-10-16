@@ -6,6 +6,7 @@
 export const pathToFeatureKey: Record<string, string> = {
   "/dashboard": "dashboard",
   "/invoices": "invoices",
+  "/pdf-editor": "pdf_editor",
   "/customers": "customers",
   "/statements": "statements",
   "/expenses": "expenses",

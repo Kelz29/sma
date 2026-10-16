@@ -25,6 +25,7 @@ import { PitchDecksPage } from "@/features/sales/pages/PitchDecksPage";
 import { PipelinePage } from "@/features/sales/pages/PipelinePage";
 import { PortalPage } from "@/features/portal/pages/PortalPage";
 import { ProfilePage } from "@/features/profile/pages/ProfilePage";
+import { PdfEditorPage } from "@/features/pdf-editor/pages/PdfEditorPage";
 import { RequireFeature } from "@/features/feature-flags/RequireFeature";
 import { useAuthStore } from "@/store/authStore";
 
@@ -86,6 +87,9 @@ export function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route element={<RequireRole roles={["admin", "accountant", "viewer", "sales", "superadmin"]} />}>
+              <Route path="/pdf-editor" element={<PdfEditorPage />} />
+            </Route>
             <Route element={<RequireRole roles={["admin", "accountant", "viewer", "superadmin"]} />}>
               <Route path="/invoices" element={<InvoicesPage />} />
               <Route path="/customers" element={<CustomersPage />} />

@@ -121,3 +121,45 @@ def test_invoices_description_roundtrip(client: TestClient, auth_headers: dict) 
   )
   assert r2.status_code == 200
   assert r2.json()["description"] == "Website rebuild – phase 2 (revised)"
+
+
+def test_invoices_update_number(client: TestClient, auth_headers: dict) -> None:
+  first = client.post(
+    "/api/v1/invoices/",
+    json={
+      "customer_name": "Number Co",
+      "issue_date": "2025-03-01",
+      "currency": "ZAR",
+      "invoice_number": 10,
+      "lines": [{"description": "Work", "quantity": 1, "unit_price": 100}],
+    },
+    headers=auth_headers,
+  )
+  assert first.status_code == 201
+  second = client.post(
+    "/api/v1/invoices/",
+    json={
+      "customer_name": "Number Co",
+      "issue_date": "2025-03-02",
+      "currency": "ZAR",
+      "lines": [{"description": "Work", "quantity": 1, "unit_price": 50}],
+    },
+    headers=auth_headers,
+  )
+  assert second.status_code == 201
+  inv_id = second.json()["id"]
+
+  updated = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={"invoice_number": 42},
+    headers=auth_headers,
+  )
+  assert updated.status_code == 200
+  assert updated.json()["invoice_number"] == 42
+
+  conflict = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={"invoice_number": 10},
+    headers=auth_headers,
+  )
+  assert conflict.status_code == 400

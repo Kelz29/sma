@@ -9,6 +9,7 @@ from app.db.models.accounting import Customer, Invoice, InvoiceStatus
 from app.middleware.tenant_context import get_current_tenant_id
 from app.schemas.accounting import CustomerCreate, CustomerRead, CustomerUpdate
 from app.utils.invoice_payments import invoice_amount_paid, invoice_balance_due
+from app.utils.telemetry import record_action
 
 router = APIRouter(tags=["customers"])
 
@@ -82,6 +83,13 @@ def create_customer(
   db.add(customer)
   db.commit()
   db.refresh(customer)
+  record_action(
+    action="customer_created",
+    path="/api/v1/customers",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   return customer
 
 
