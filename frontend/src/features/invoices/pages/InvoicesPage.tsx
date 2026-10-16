@@ -230,6 +230,7 @@ export function InvoicesPage() {
   const [pdfDoctype, setPdfDoctype] = useState<PdfDoctype>("invoice");
   const [emailMessage, setEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
+  const [savedLinesOpen, setSavedLinesOpen] = useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
   const isEditing = editingInvoiceId !== null;
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
@@ -268,6 +269,10 @@ export function InvoicesPage() {
       return res.data;
     },
   });
+
+  useEffect(() => {
+    if (!newInvoiceOpen) setSavedLinesOpen(false);
+  }, [newInvoiceOpen]);
 
   const { data: previewHtml } = useQuery<string>({
     queryKey: ["invoices", "preview", pdfTheme, pdfDoctype],
@@ -1550,39 +1555,49 @@ export function InvoicesPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="flex items-center justify-between mb-2 gap-2">
                   <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Line items</label>
-                  <div className="flex items-center gap-2">
-                    {lineItemTemplates.length > 0 && (
-                      <select
-                        className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-primary"
-                        value=""
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          if (!id) return;
-                          e.target.value = "";
-                          const t = lineItemTemplates.find((x) => x.id === Number(id));
-                          if (t) {
-                            append({
-                              description: t.description,
-                              quantity: Number(t.default_quantity) || 1,
-                              unit_price: Number(t.unit_price) ?? 0,
-                              vat_rate: t.vat_rate != null ? Number(t.vat_rate) : undefined,
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Add from saved…</option>
-                        {lineItemTemplates.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.description}: {formatAmount(Number(t.unit_price), BASE_CURRENCY_CODE)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <button type="button" onClick={() => append({ description: "", quantity: 1, unit_price: 0, vat_rate: undefined })} className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700">+ Add line</button>
-                  </div>
+                  <button type="button" onClick={() => append({ description: "", quantity: 1, unit_price: 0, vat_rate: undefined })} className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700">+ Add line</button>
                 </div>
+                {lineItemTemplates.length > 0 && (
+                  <div className="mb-3">
+                    <button
+                      type="button"
+                      aria-expanded={savedLinesOpen}
+                      aria-label="Add from saved"
+                      onClick={() => setSavedLinesOpen((open) => !open)}
+                      className="flex w-full items-center justify-between rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-brand-primary"
+                    >
+                      <span>Add from saved…</span>
+                      <span aria-hidden className="text-xs text-slate-400">{savedLinesOpen ? "▴" : "▾"}</span>
+                    </button>
+                    {savedLinesOpen && (
+                      <ul role="listbox" aria-label="Saved line items" className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm">
+                        {lineItemTemplates.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              role="option"
+                              onClick={() => {
+                                append({
+                                  description: t.description,
+                                  quantity: Number(t.default_quantity) || 1,
+                                  unit_price: Number(t.unit_price) ?? 0,
+                                  vat_rate: t.vat_rate != null ? Number(t.vat_rate) : undefined,
+                                });
+                                setSavedLinesOpen(false);
+                              }}
+                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700"
+                            >
+                              <span className="min-w-0 truncate">{t.description}</span>
+                              <span className="shrink-0 text-slate-500 dark:text-slate-400">{formatAmount(Number(t.unit_price), BASE_CURRENCY_CODE, { useSymbol: true })}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <DndContext sensors={lineSensors} collisionDetection={closestCenter} onDragEnd={handleLineDragEnd}>
                     <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>

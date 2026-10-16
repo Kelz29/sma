@@ -33,6 +33,22 @@ describe("InvoicesPage", () => {
     expect(screen.getByText(/Invoice number \(optional\)/i)).toBeInTheDocument();
   });
 
+  it("opens saved line items as a list instead of a cramped select", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url === "/line-item-templates/") {
+        return { data: [{ id: 4, description: "Telematics Dashboard Update", default_quantity: 1, unit_price: 22000, vat_rate: null }] };
+      }
+      return { data: [] };
+    });
+    render(<InvoicesPage />);
+    await screen.findByText(/No invoices yet/i);
+    await user.click(screen.getByRole("button", { name: /\+ New invoice/i }));
+    await user.click(await screen.findByRole("button", { name: "Add from saved" }));
+    expect(await screen.findByRole("option", { name: /Telematics Dashboard Update/i })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /add from saved/i })).not.toBeInTheDocument();
+  });
+
   it("lets an existing invoice number be edited", async () => {
     const user = userEvent.setup();
     vi.mocked(api.get).mockImplementation(async (url: string) => {

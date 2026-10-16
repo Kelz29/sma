@@ -58,13 +58,20 @@ function editBox(edit: PdfEdit, viewport: PdfViewport) {
   }
   const [x, y] = viewport.convertToViewportPoint(edit.x, edit.y);
   const size = edit.fontSize * viewport.scale;
-  const textWidth = edit.kind === "replace" ? edit.width : Math.max(edit.text.length, 1) * edit.fontSize * 0.5;
+  const estimated = Math.max(edit.text.length, 1) * edit.fontSize * 0.55;
+  const textWidth = edit.kind === "replace" ? Math.max(edit.width, estimated) : estimated;
   return {
     left: x,
     top: y - size,
     width: Math.max(textWidth * viewport.scale, 8),
     height: size * 1.2,
   };
+}
+
+function cssFamily(embedFont: string): string {
+  if (embedFont === "Times") return "Times, 'Times New Roman', serif";
+  if (embedFont === "Courier") return "'Courier New', Courier, monospace";
+  return "Helvetica, Arial, sans-serif";
 }
 
 function SignaturePad({ onCancel, onSave }: { onCancel: () => void; onSave: (pngBase64: string) => void }) {
@@ -516,7 +523,10 @@ export function PdfEditorPage() {
   };
 
   const applyReplacement = () => {
-    writeReplace({ text: draft });
+    if (!selectedRun || !currentPage) return;
+    const fontSize = replaceForRun()?.fontSize ?? selectedRun.fontSize;
+    const width = Math.max(selectedRun.width, Math.max(draft.length, 1) * fontSize * 0.55);
+    writeReplace({ text: draft, width });
   };
 
   const patchSelected = (patch: Partial<Extract<PdfEdit, { kind: "text" | "replace" | "image" }>>) => {
@@ -760,10 +770,19 @@ export function PdfEditorPage() {
                 onMouseMove={onMouseMove}
                 onMouseUp={onMouseUp}
               >
-                {shownBoxes.map((box) => (
+                {shownBoxes.map((box) => {
+                  const run = runs.find((item) => item.id === box.key);
+                  return (
                   <div
                     key={box.key}
-                    className={`absolute border ${box.selected ? "border-emerald-500 bg-emerald-400/20" : box.replaced ? "border-amber-500 bg-amber-300/20" : "border-transparent hover:border-slate-400/70"}`}
+                    role="button"
+                    aria-label={run ? `Select ${run.text}` : box.key}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedRunId(box.key);
+                      setSelectedEditId(null);
+                    }}
+                    className={`absolute border ${box.selected ? "border-emerald-500 bg-emerald-400/20" : box.replaced ? "border-transparent" : "border-transparent hover:border-slate-400/70"}`}
                     style={{
                       left: canvasSize.width ? `${(box.left / canvasSize.width) * 100}%` : 0,
                       top: canvasSize.height ? `${(box.top / canvasSize.height) * 100}%` : 0,
@@ -771,9 +790,11 @@ export function PdfEditorPage() {
                       height: canvasSize.height ? `${(box.height / canvasSize.height) * 100}%` : 0,
                     }}
                   />
-                ))}
+                  );
+                })}
                 {viewport && pageEdits.map((edit) => {
                   const box = editBox(edit, viewport);
+                  const isText = edit.kind === "text" || edit.kind === "replace";
                   return (
                     <div
                       key={edit.id}
@@ -784,14 +805,21 @@ export function PdfEditorPage() {
                         setSelectedEditId(edit.id);
                         setSelectedRunId(null);
                       }}
-                      className={`absolute border ${selectedEditId === edit.id ? "border-sky-500 bg-sky-300/20" : "border-sky-300/60"} cursor-move`}
+                      className={`absolute border cursor-move overflow-hidden whitespace-nowrap ${selectedEditId === edit.id ? "border-sky-500" : isText ? "border-amber-500" : "border-sky-300/60"} ${isText ? "bg-white" : selectedEditId === edit.id ? "bg-sky-300/20" : ""}`}
                       style={{
                         left: canvasSize.width ? `${(box.left / canvasSize.width) * 100}%` : 0,
                         top: canvasSize.height ? `${(box.top / canvasSize.height) * 100}%` : 0,
                         width: canvasSize.width ? `${(box.width / canvasSize.width) * 100}%` : 0,
                         height: canvasSize.height ? `${(box.height / canvasSize.height) * 100}%` : 0,
+                        color: isText ? edit.color : undefined,
+                        fontFamily: isText ? cssFamily(edit.embedFont) : undefined,
+                        fontSize: isText ? `${edit.fontSize * viewport.scale}px` : undefined,
+                        fontWeight: isText && edit.bold ? 700 : 400,
+                        lineHeight: 1,
                       }}
-                    />
+                    >
+                      {isText ? edit.text : null}
+                    </div>
                   );
                 })}
               </div>
@@ -818,10 +846,13 @@ export function PdfEditorPage() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Download uses {downloadFontNote}. The embedded font file cannot be reused.</p>
               )}
               <label htmlFor="pdf-replacement" className="block text-xs font-medium text-slate-600 dark:text-slate-400">Replacement</label>
-              <input id="pdf-replacement" value={draft} onChange={(event) => setDraft(event.target.value)} className={inputClass} />
+              <input id="pdf-replacement" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyReplacement(); }} className={inputClass} />
               <button type="button" onClick={applyReplacement} className="w-full rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-white hover:bg-brand-primary-hover">
                 Apply replacement
               </button>
+              {runReplace && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">Showing “{runReplace.text}” on the page. Download PDF to keep it.</p>
+              )}
             </>
           ) : selectedEdit && (selectedEdit.kind === "text" || selectedEdit.kind === "replace") ? (
             <>

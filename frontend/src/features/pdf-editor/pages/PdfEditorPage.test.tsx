@@ -109,4 +109,47 @@ describe("PdfEditorPage", () => {
     await user.click(screen.getByRole("button", { name: /next match/i }));
     expect(await screen.findByText(/Page 2 of 2/)).toBeInTheDocument();
   });
+
+  it("shows a replacement on the page when Apply replacement is clicked", async () => {
+    const user = userEvent.setup();
+    vi.mocked(openPdf).mockResolvedValue({
+      numPages: 1,
+      destroy: vi.fn(async () => undefined),
+      getPage: vi.fn(async () => ({
+        getViewport: ({ scale }: { scale: number }) => ({
+          width: 200 * scale,
+          height: 200 * scale,
+          scale,
+          convertToViewportPoint: (x: number, y: number) => [x * scale, y * scale],
+          convertToPdfPoint: (x: number, y: number) => [x / scale, y / scale],
+        }),
+        getTextContent: async () => ({ items: [], styles: {} }),
+        getOperatorList: async () => ({ fnArray: [], argsArray: [] }),
+        render: () => ({ promise: Promise.resolve() }),
+      })),
+    });
+    vi.mocked(readPageRuns).mockResolvedValue([{
+      id: "run-0",
+      text: "Invoice #270",
+      x: 10,
+      y: 40,
+      width: 80,
+      height: 14,
+      fontSize: 14,
+      fontFamily: "Helvetica",
+      color: "#000000",
+      embedFont: "Helvetica",
+    }]);
+    render(<PdfEditorPage />);
+    await screen.findByRole("option", { name: /TLH Transport/i });
+    await user.selectOptions(screen.getByLabelText(/^invoice$/i), "1");
+    await user.click(screen.getByRole("button", { name: /load invoice/i }));
+    await user.click(await screen.findByRole("button", { name: "Select Invoice #270" }));
+    const field = await screen.findByLabelText(/^replacement$/i);
+    await user.clear(field);
+    await user.type(field, "Invoice #268");
+    await user.click(screen.getByRole("button", { name: /apply replacement/i }));
+    expect(await screen.findByText("Invoice #268")).toBeInTheDocument();
+    expect(screen.getByText(/Download PDF to keep it/)).toBeInTheDocument();
+  });
 });
