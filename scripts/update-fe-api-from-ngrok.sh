@@ -32,4 +32,5 @@ fi
 
 echo "Updated $ENV_FILE"
 echo "VITE_API_URL=${API}"
-echo "Rebuild FE for cPanel: npm --prefix frontend run build:cpanel"
+echo "Local cPanel bundle: npm --prefix frontend run build:cpanel"
+echo "Production upload runs on the home server: ~/Documents/sma/deploy-frontend.sh"

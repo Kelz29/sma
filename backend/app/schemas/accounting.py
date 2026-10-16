@@ -155,6 +155,7 @@ class InvoiceCreate(BaseModel):
 
 
 class InvoiceUpdate(BaseModel):
+  invoice_number: Optional[int] = None  # Change the displayed invoice/quotation number
   customer_name: Optional[constr(strip_whitespace=True, max_length=255)] = None
   customer_email: Optional[constr(strip_whitespace=True, max_length=255)] = None
   description: Optional[constr(strip_whitespace=True, max_length=255)] = None

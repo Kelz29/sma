@@ -54,6 +54,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       .filter((item) => item.key !== "payslips" || (role !== "viewer")) // Payslips: accountant/admin only
       .forEach((item) => navItems.push({ to: item.to, label: item.label }));
   }
+  if (role && ["admin", "accountant", "viewer", "sales", "superadmin"].includes(role) && isEnabled("pdf_editor")) {
+    navItems.push({ to: "/pdf-editor", label: "PDF editor" });
+  }
   if (role && ["admin", "sales", "superadmin"].includes(role)) {
     salesNavItems.filter((item) => isEnabled(item.key)).forEach((item) => navItems.push({ to: item.to, label: item.label }));
   }

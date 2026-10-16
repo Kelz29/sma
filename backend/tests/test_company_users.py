@@ -48,6 +48,8 @@ def test_company_users_forbidden_for_viewer(client: TestClient) -> None:
 
 
 def test_company_users_list_and_create(client: TestClient, auth_headers: dict) -> None:
+  from unittest.mock import patch
+
   r = client.get("/api/v1/company/users", headers=auth_headers)
   assert r.status_code == 200
   data = r.json()
@@ -56,21 +58,29 @@ def test_company_users_list_and_create(client: TestClient, auth_headers: dict) -
   assert len(data) >= 1
   assert any(u["email"] == "testuser@example.com" for u in data)
 
-  r2 = client.post(
-    "/api/v1/company/users",
-    json={
-      "email": "newuser@example.com",
-      "full_name": "New User",
-      "password": "Password123!",
-      "role": "accountant",
-    },
-    headers=auth_headers,
-  )
+  with patch("app.api.v1.company.enqueue_email") as enq:
+    enq.return_value = None
+    r2 = client.post(
+      "/api/v1/company/users",
+      json={
+        "email": "newuser@example.com",
+        "full_name": "New User",
+        "password": "Password123!",
+        "role": "accountant",
+      },
+      headers=auth_headers,
+    )
   assert r2.status_code == 201
   created = r2.json()
   assert created["email"] == "newuser@example.com"
   assert created["role"] == "accountant"
   assert created["full_name"] == "New User"
+  assert enq.called
+  kwargs = enq.call_args.kwargs
+  assert kwargs["kind"] == "team_invite"
+  assert kwargs["to_email"] == "newuser@example.com"
+  assert kwargs["payload"]["temporary_password"] == "Password123!"
+  assert kwargs["payload"]["tenant_slug"] == "test-tenant"
 
   r3 = client.get("/api/v1/company/users", headers=auth_headers)
   assert r3.status_code == 200

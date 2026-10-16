@@ -3,5 +3,7 @@ cpanel/
 .env
 .env.*
 !.env.example
+frontend-ftp.env
+deploy/frontend-ftp.env
 **/.DS_Store
 *.log

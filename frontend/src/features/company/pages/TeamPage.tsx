@@ -93,7 +93,7 @@ export function TeamPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
           <p className="text-sm text-muted-foreground">
-            Manage users in your company. New users are added as employees automatically. Only company admins can add or change users.
+            Manage users in your company. New users get an invite email with sign-in details and are added as employees automatically.
           </p>
         </div>
         <button

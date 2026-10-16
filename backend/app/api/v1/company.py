@@ -4,11 +4,14 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.core.config import settings
 from app.db.models.hr import Employee
 from app.db.models.tenant import Tenant
 from app.db.models.user import TenantUser, User
 from app.middleware.tenant_context import get_current_tenant_id
+from app.utils.email_queue import KIND_TEAM_INVITE, enqueue_email
 from app.utils.password import get_password_hash
+from app.utils.telemetry import record_action
 
 router = APIRouter(tags=["company"])
 
@@ -208,6 +211,11 @@ def create_company_user(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail=f"Role must be one of: {', '.join(sorted(ALLOWED_ROLES))}",
     )
+  tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+  if not tenant:
+    raise HTTPException(status_code=400, detail="Tenant not resolved")
+
+  created_new_user = False
   user = db.query(User).filter(User.email == payload.email).first()
   if user:
     existing = (
@@ -221,6 +229,7 @@ def create_company_user(
         detail="User already exists in this company",
       )
   else:
+    created_new_user = True
     user = User(
       email=payload.email,
       full_name=payload.full_name,
@@ -264,6 +273,33 @@ def create_company_user(
     db.add(emp)
     db.commit()
 
+  # Notify the user (queued; do not fail create if email enqueue fails).
+  try:
+    base = (getattr(settings, "APP_BASE_URL", None) or "https://app.smartseen.co.za").rstrip("/")
+    enqueue_email(
+      db,
+      kind=KIND_TEAM_INVITE,
+      to_email=user.email,
+      payload={
+        "full_name": user.full_name or payload.full_name,
+        "company_name": tenant.name,
+        "tenant_slug": tenant.slug,
+        "role": payload.role,
+        "login_url": f"{base}/login",
+        "temporary_password": payload.password if created_new_user else None,
+      },
+      idempotency_key=f"team_invite:{tenant_id}:{user.id}:{tenant_link.id}",
+    )
+  except Exception:
+    pass
+
+  record_action(
+    action="team_user_invited",
+    path="/api/v1/company/users",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   return CompanyUserRead(
     id=tenant_link.id,
     user_id=user.id,

@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist, email_outbox  # noqa: F401
+from app.db.models import accounting, tenant, user, hr, sales, feature_flag, waitlist, email_outbox, usage  # noqa: F401
 
 _connect_args = {}
 if getattr(settings, "USE_SQLITE", False):
@@ -183,6 +183,29 @@ else:
           UNIQUE KEY uq_email_outbox_idempotency (idempotency_key),
           INDEX idx_email_outbox_status (status),
           INDEX idx_email_outbox_kind (kind)
+        )
+      """))
+      conn.commit()
+    except Exception:
+      conn.rollback()
+    try:
+      conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS usage_events (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          kind VARCHAR(32) NOT NULL,
+          path VARCHAR(255) NOT NULL,
+          action VARCHAR(64) NULL,
+          method VARCHAR(16) NULL,
+          status_code INT NULL,
+          message TEXT NULL,
+          stack TEXT NULL,
+          user_id INT NULL,
+          tenant_id INT NULL,
+          role VARCHAR(50) NULL,
+          created_at DATETIME NOT NULL,
+          INDEX ix_usage_events_created_at (created_at),
+          INDEX ix_usage_events_tenant_id (tenant_id),
+          INDEX ix_usage_events_user_id (user_id)
         )
       """))
       conn.commit()
