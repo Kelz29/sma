@@ -25,6 +25,7 @@ FEATURE_KEYS = [
   "dashboard",
   # Accounting (each sub-feature can be toggled)
   "invoices",
+  "pdf_editor",
   "expenses",
   "reports",
   "banking",
@@ -46,6 +47,7 @@ FEATURE_KEYS = [
 FEATURE_DEFAULTS: dict[str, bool] = {
   "dashboard": True,
   "invoices": True,
+  "pdf_editor": True,
   "expenses": True,
   "reports": True,
   "banking": True,

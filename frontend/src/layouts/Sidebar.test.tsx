@@ -46,6 +46,7 @@ describe("Sidebar", () => {
     expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /dashboard/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /invoices/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /pdf editor/i }).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole("link", { name: /^hr$/i })).toHaveLength(0);
     useAuthStore.getState().clearAuth();
   });
@@ -74,6 +75,7 @@ describe("Sidebar", () => {
     expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /dashboard/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /invoices/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /pdf editor/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /^hr$/i }).length).toBeGreaterThan(0);
     useAuthStore.getState().clearAuth();
   });
@@ -86,6 +88,7 @@ describe("Sidebar", () => {
     });
     render(<Sidebar />);
     expect(await screen.findByRole("link", { name: /my portal/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /pdf editor/i })).not.toBeInTheDocument();
     useAuthStore.getState().clearAuth();
   });
 

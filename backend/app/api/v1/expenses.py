@@ -27,6 +27,7 @@ from app.schemas.expenses_banking import (
 )
 from app.utils.audit import log_audit
 from app.utils.receipt_extract import extract_receipt_data
+from app.utils.telemetry import record_action
 
 router = APIRouter(tags=["expenses"])
 
@@ -164,6 +165,13 @@ def create_expense(
 
   db.commit()
   db.refresh(expense)
+  record_action(
+    action="expense_created",
+    path="/api/v1/expenses",
+    user_id=ctx["user"].id,
+    tenant_id=tenant_id,
+    role=ctx["tenant_user"].role,
+  )
   return expense
 
 

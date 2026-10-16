@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
+import { UsagePanel } from "./UsagePanel";
 
 interface TenantSummary {
   id: number;
@@ -50,7 +51,7 @@ const FEATURE_GROUPS: { heading: string; keys: string[] }[] = [
   { heading: "Other", keys: ["dashboard", "hr", "settings", "team", "profile", "portal"] },
 ];
 
-type SuperAdminTab = "feature-unlock" | "tenants";
+type SuperAdminTab = "feature-unlock" | "tenants" | "usage";
 
 export function SuperAdminPage() {
   const queryClient = useQueryClient();
@@ -128,6 +129,7 @@ export function SuperAdminPage() {
   const tabs = [
     { id: "feature-unlock" as const, label: "Feature Unlock" },
     { id: "tenants" as const, label: "Tenants" },
+    { id: "usage" as const, label: "Usage" },
   ];
 
   return (
@@ -135,7 +137,7 @@ export function SuperAdminPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Superadmin</h1>
         <p className="text-sm text-muted-foreground">
-          Feature flags and tenant management for SmartSeen.
+          Feature flags, tenant management, and product usage for SmartSeen.
         </p>
       </div>
 
@@ -158,6 +160,8 @@ export function SuperAdminPage() {
           ))}
         </nav>
       </div>
+
+      {activeTab === "usage" && <UsagePanel />}
 
       {activeTab === "feature-unlock" && (
       <section className="space-y-3">

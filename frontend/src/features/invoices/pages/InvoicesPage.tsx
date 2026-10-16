@@ -495,6 +495,9 @@ export function InvoicesPage() {
         const email = (values.customer_email as string)?.toString().trim();
         if (email) payload.customer_email = email;
       }
+      if (values.invoice_number != null && values.invoice_number > 0) {
+        payload.invoice_number = Number(values.invoice_number);
+      }
       applyDiscountToPayload(payload, values, true);
       const res = await api.put(`/invoices/${id}`, payload);
       return res.data;
@@ -735,6 +738,7 @@ export function InvoicesPage() {
       const res = await api.get(`/invoices/${invoiceId}`);
       const inv = res.data as {
         id: number;
+        invoice_number: number;
         customer_name: string | null;
         customer_email: string | null;
         description: string | null;
@@ -768,6 +772,7 @@ export function InvoicesPage() {
         customer_id: "",
         customer_name: inv.customer_name ?? "",
         customer_email: inv.customer_email ?? "",
+        invoice_number: inv.invoice_number,
         description: inv.description ?? "",
         issue_date: inv.issue_date,
         due_date: inv.due_date ?? "",
@@ -1391,19 +1396,27 @@ export function InvoicesPage() {
                 </p>
               )}
 
-              {!isEditing && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Invoice number (optional)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Leave blank for auto"
-                    {...register("invoice_number")}
-                    className="w-full max-w-[140px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">If blank, the next number is used automatically.</p>
-                </div>
-              )}
+              <div>
+                <label htmlFor="invoice_number" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  {isEditing ? "Invoice / quotation number" : "Invoice number (optional)"}
+                </label>
+                <input
+                  id="invoice_number"
+                  type="number"
+                  min={1}
+                  placeholder={isEditing ? undefined : "Leave blank for auto"}
+                  {...register("invoice_number")}
+                  className="w-full max-w-[140px] rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {isEditing
+                    ? "This number appears on the invoice and on the quotation."
+                    : "If blank, the next number is used automatically."}
+                </p>
+                {errors.invoice_number && (
+                  <p className="mt-0.5 text-xs text-red-500 dark:text-red-400">{errors.invoice_number.message}</p>
+                )}
+              </div>
 
               {/* Customer (read-only when editing, selectable when creating) */}
               {!isEditing ? (

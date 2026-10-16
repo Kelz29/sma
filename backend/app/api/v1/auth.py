@@ -20,6 +20,7 @@ from app.utils.email_queue import (
 from app.utils.password import get_password_hash, verify_password
 from app.core.redis_client import cache_delete
 from app.utils.rate_limit import check_auth_rate_limit
+from app.utils.telemetry import record_action
 
 router = APIRouter(tags=["auth"])
 
@@ -62,6 +63,13 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
   access_token = create_access_token(
     subject=str(user.id),
+    tenant_id=tenant.id,
+    role=tenant_link.role,
+  )
+  record_action(
+    action="signed_in",
+    path="/api/v1/auth/login",
+    user_id=user.id,
     tenant_id=tenant.id,
     role=tenant_link.role,
   )
@@ -164,6 +172,13 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
 
   access_token = create_access_token(
     subject=str(user.id),
+    tenant_id=tenant.id,
+    role=role,
+  )
+  record_action(
+    action="registered",
+    path="/api/v1/auth/register",
+    user_id=user.id,
     tenant_id=tenant.id,
     role=role,
   )

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 KIND_WELCOME_VERIFY = "welcome_verify"
 KIND_EMAIL_CONFIRMED = "email_confirmed"
+KIND_TEAM_INVITE = "team_invite"
 KIND_INVOICE = "invoice"
 KIND_REPORT = "report"
 

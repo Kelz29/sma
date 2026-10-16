@@ -31,6 +31,12 @@ class MonitoringMiddleware(BaseHTTPMiddleware):
     record_request(status)
     if status >= 500:
       record_error()
+      try:
+        from app.utils.telemetry import note_api_error
+
+        note_api_error(request, status)
+      except Exception:
+        logger.exception("Failed to record api_error")
 
     # Skip logging for health/metrics to reduce noise
     if path not in ("/health", "/metrics"):

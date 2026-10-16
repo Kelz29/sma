@@ -42,7 +42,8 @@ export function PrivacyPolicyPage() {
               We collect information you provide when you register (e.g. name, email, business name),
               and data you create when using the platform (invoices, employees, expenses, etc.).
               We also collect technical data such as IP address and usage for security and
-              operational purposes.
+              operational purposes. Pages visited, feature actions, and error details are kept
+              to operate and improve the service and are visible to the platform operator.
             </p>
           </section>
           <section>
