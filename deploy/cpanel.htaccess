@@ -1,8 +1,5 @@
-# SPA fallback for app.smartseen.co.za (Apache / cPanel).
-Options -Indexes
-<IfModule mod_negotiation.c>
-  Options -MultiViews
-</IfModule>
+# SPA fallback for app.smartseen.co.za (Apache / LiteSpeed / cPanel).
+# This file must sit in the same folder as index.html.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -10,6 +7,9 @@ Options -Indexes
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
+</IfModule>
+<IfModule mod_dir.c>
+  FallbackResource /index.html
 </IfModule>
 <IfModule mod_headers.c>
   <FilesMatch "^index\.html$">
