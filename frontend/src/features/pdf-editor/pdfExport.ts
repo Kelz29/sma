@@ -55,8 +55,10 @@ export function moveEdit<T extends { x: number; y: number }>(edit: T, x: number,
   return { ...edit, x, y };
 }
 
+const loadOptions = { ignoreEncryption: true };
+
 export async function embeddedFontNames(data: ArrayBuffer, pageIndex: number): Promise<string[]> {
-  const pdf = await PDFDocument.load(data);
+  const pdf = await PDFDocument.load(data, loadOptions);
   const page = pdf.getPages()[pageIndex];
   const resources = page?.node.Resources();
   const fonts = resources?.lookupMaybe(PDFName.of("Font"), PDFDict);
@@ -92,7 +94,7 @@ function decodeBase64(data: string): Uint8Array {
 }
 
 export async function exportEditedPdf(original: ArrayBuffer, edits: PdfEdit[], pages: EditorPage[]): Promise<Uint8Array> {
-  const src = await PDFDocument.load(original);
+  const src = await PDFDocument.load(original, loadOptions);
   const pdf = await PDFDocument.create();
   const order = pages.length
     ? pages

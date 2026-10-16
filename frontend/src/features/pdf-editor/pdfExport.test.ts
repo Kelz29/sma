@@ -88,6 +88,31 @@ describe("exportEditedPdf", () => {
     expect(xobject).toBeInstanceOf(PDFDict);
   });
 
+  it("exports an edit from a PDF marked as encrypted", async () => {
+    const original = await blankPdf(["Page"]);
+    const loaded = await PDFDocument.load(original);
+    const encrypt = loaded.context.obj({ Filter: "Standard" });
+    loaded.context.trailerInfo.Encrypt = loaded.context.register(encrypt);
+    const encrypted = await loaded.save();
+    await expect(PDFDocument.load(encrypted)).rejects.toThrow(/encrypted/);
+    const edit: PdfEdit = {
+      id: "t1",
+      kind: "text",
+      pageId: "p1",
+      text: "Saved",
+      x: 12,
+      y: 40,
+      fontSize: 12,
+      color: "#000000",
+      embedFont: "Helvetica",
+      bold: false,
+    };
+    const bytes = await exportEditedPdf(copyBuffer(encrypted), [edit], [{ id: "p1", sourceIndex: 0, rotation: 0 }]);
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.isEncrypted).toBe(false);
+    expect(visibleText(streamText(pdf, 0))).toContain("Saved");
+  });
+
   it("drops a deleted page and exports the remaining pages in the new order", async () => {
     const original = await blankPdf(["ONE", "TWO", "THREE"]);
     let pages: EditorPage[] = [
