@@ -153,7 +153,7 @@ export function StatementsPage() {
                           <tr key={inv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
                             <td className="py-3 pl-4 font-mono text-xs text-slate-600 dark:text-slate-400">{String(inv.invoice_number).padStart(5, "0")}</td>
                             <td className="py-3 px-4 text-slate-800 dark:text-slate-200">{inv.issue_date}</td>
-                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{inv.due_date ?? "—"}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{inv.due_date ?? ""}</td>
                             <td className="py-3 px-4 text-right font-medium text-slate-800 dark:text-slate-200">{formatAmount(inv.total, inv.currency)}</td>
                             <td className="py-3 px-4">
                               <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{inv.status}</span>

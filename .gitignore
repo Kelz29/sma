@@ -1,0 +1,9 @@
+# Root ignore — keep upload artefacts and local env out of git.
+cpanel/
+.env
+.env.*
+!.env.example
+frontend-ftp.env
+deploy/frontend-ftp.env
+**/.DS_Store
+*.log

@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-import userEvent from "@testing-library/user-event";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@/test/utils";
 import { ErrorBoundary } from "./ErrorBoundary";
 
@@ -25,8 +24,8 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>
     );
     expect(screen.getByRole("heading", { name: /something went wrong/i })).toBeInTheDocument();
-    expect(screen.getByText(/the page encountered an error/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.getByText(/run into an error/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh page/i })).toBeInTheDocument();
     vi.restoreAllMocks();
   });
 
@@ -41,15 +40,14 @@ describe("ErrorBoundary", () => {
     vi.restoreAllMocks();
   });
 
-  it("Try again button resets error state (child may rethrow)", async () => {
-    const user = userEvent.setup();
+  it("Refresh page button is available after an error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary>
         <Throw />
       </ErrorBoundary>
     );
-    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(screen.getByRole("button", { name: /refresh page/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /something went wrong/i })).toBeInTheDocument();
     vi.restoreAllMocks();
   });

@@ -170,7 +170,7 @@ export function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Reports</h1>
           <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            BI-style insights on revenue, expenses, customers, and cash flow. Download or email reports.
+            BI style insights on revenue, expenses, customers, and cash flow. Download or email reports.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

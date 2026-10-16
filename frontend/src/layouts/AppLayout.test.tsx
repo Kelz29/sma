@@ -1,10 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@/test/utils";
 import { AppLayout } from "./AppLayout";
 import { Route, Routes } from "react-router-dom";
 
+vi.mock("@/lib/axios", () => ({
+  api: {
+    get: vi.fn().mockResolvedValue({
+      data: { name: "Test Co", logo_url: null, primary_color: null, secondary_color: null },
+    }),
+  },
+}));
+
 describe("AppLayout", () => {
-  it("renders sidebar, topbar and outlet content", () => {
+  it("renders sidebar, topbar and outlet content", async () => {
     render(
       <Routes>
         <Route element={<AppLayout />}>
@@ -13,8 +21,8 @@ describe("AppLayout", () => {
       </Routes>,
       { initialEntries: ["/"] }
     );
-    expect(screen.getAllByText("SmartSeen")[0]).toBeInTheDocument();
+    expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
     expect(screen.getByTestId("outlet")).toHaveTextContent("Dashboard content");
-    expect(screen.getByRole("button", { name: /user menu/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /logout/i })).toBeInTheDocument();
   });
 });

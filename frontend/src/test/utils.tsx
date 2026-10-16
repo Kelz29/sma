@@ -1,14 +1,19 @@
-import { ReactElement } from "react";
+import { ReactElement, useState } from "react";
 import { render, RenderOptions } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false },
-    mutations: { retry: false },
-  },
-});
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+}
+
+/** @deprecated Prefer per-render client from customRender; kept for tests that import it. */
+export const queryClient = createTestQueryClient();
 
 type ExtendedOptions = RenderOptions & { initialEntries?: string[] };
 
@@ -19,8 +24,9 @@ function AllTheProviders({
   children: React.ReactNode;
   initialEntries?: string[];
 }) {
+  const [client] = useState(() => createTestQueryClient());
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
     </QueryClientProvider>
   );

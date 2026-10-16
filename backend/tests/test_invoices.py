@@ -76,3 +76,90 @@ def test_invoices_create_validation_fails(client: TestClient, auth_headers: dict
     headers=auth_headers,
   )
   assert r.status_code == 422
+
+
+def test_invoices_discount_percent(client: TestClient, auth_headers: dict) -> None:
+  payload = {
+    "customer_name": "Discount Co",
+    "issue_date": "2025-03-01",
+    "currency": "ZAR",
+    "discount_type": "percent",
+    "discount_value": 10,
+    "lines": [{"description": "Service", "quantity": 1, "unit_price": 1000, "vat_rate": 15}],
+  }
+  r = client.post("/api/v1/invoices/", json=payload, headers=auth_headers)
+  assert r.status_code == 201
+  data = r.json()
+  assert float(data["subtotal"]) == 1000.0
+  assert float(data["discount_amount"]) == 100.0
+  assert float(data["discount_percent"]) == 10.0
+  assert abs(float(data["vat_amount"]) - 135.0) < 0.01
+  assert abs(float(data["total"]) - 1035.0) < 0.01
+
+
+def test_invoices_description_roundtrip(client: TestClient, auth_headers: dict) -> None:
+  payload = {
+    "customer_name": "Acme Inc",
+    "description": "Website rebuild – phase 2",
+    "issue_date": "2025-03-01",
+    "currency": "ZAR",
+    "lines": [{"description": "Development", "quantity": 1, "unit_price": 500}],
+  }
+  r = client.post("/api/v1/invoices/", json=payload, headers=auth_headers)
+  assert r.status_code == 201
+  data = r.json()
+  assert data["description"] == "Website rebuild – phase 2"
+  inv_id = data["id"]
+
+  r2 = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={
+      "description": "Website rebuild – phase 2 (revised)",
+      "lines": [{"description": "Development", "quantity": 1, "unit_price": 500}],
+    },
+    headers=auth_headers,
+  )
+  assert r2.status_code == 200
+  assert r2.json()["description"] == "Website rebuild – phase 2 (revised)"
+
+
+def test_invoices_update_number(client: TestClient, auth_headers: dict) -> None:
+  first = client.post(
+    "/api/v1/invoices/",
+    json={
+      "customer_name": "Number Co",
+      "issue_date": "2025-03-01",
+      "currency": "ZAR",
+      "invoice_number": 10,
+      "lines": [{"description": "Work", "quantity": 1, "unit_price": 100}],
+    },
+    headers=auth_headers,
+  )
+  assert first.status_code == 201
+  second = client.post(
+    "/api/v1/invoices/",
+    json={
+      "customer_name": "Number Co",
+      "issue_date": "2025-03-02",
+      "currency": "ZAR",
+      "lines": [{"description": "Work", "quantity": 1, "unit_price": 50}],
+    },
+    headers=auth_headers,
+  )
+  assert second.status_code == 201
+  inv_id = second.json()["id"]
+
+  updated = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={"invoice_number": 42},
+    headers=auth_headers,
+  )
+  assert updated.status_code == 200
+  assert updated.json()["invoice_number"] == 42
+
+  conflict = client.put(
+    f"/api/v1/invoices/{inv_id}",
+    json={"invoice_number": 10},
+    headers=auth_headers,
+  )
+  assert conflict.status_code == 400

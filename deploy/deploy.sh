@@ -29,6 +29,10 @@ if [[ -f "$REPO/deploy/deploy.sh" ]]; then
   cp "$REPO/deploy/deploy.sh" "$ROOT/deploy.sh"
   chmod +x "$ROOT/deploy.sh"
 fi
+if [[ -f "$REPO/deploy/start-ngrok-sma-tunnel.sh" ]]; then
+  cp "$REPO/deploy/start-ngrok-sma-tunnel.sh" "$ROOT/start-ngrok-sma-tunnel.sh"
+  chmod +x "$ROOT/start-ngrok-sma-tunnel.sh"
+fi
 
 # Preserve secrets + venv
 rsync -a --delete \
@@ -60,7 +64,7 @@ else
     "alembic>=1.13.1" "python-jose>=3.3.0" "passlib[bcrypt]>=1.7.4" \
     "pydantic>=2.7.0" "pydantic-settings>=2.3.0" "python-multipart>=0.0.9" \
     "structlog>=24.1.0" "weasyprint>=68.0" "redis>=5.0" "pymysql>=1.1.0" \
-    "cryptography" "email-validator" "httpx"
+    "cryptography" "email-validator" "httpx" "celery[redis]>=5.4.0"
   pip freeze > requirements-prod.txt
 fi
 
@@ -70,7 +74,22 @@ if [[ -f .env ]] && ! grep -q 'app.smartseen.co.za' .env; then
   sed -i 's|^CORS_ORIGINS=.*|CORS_ORIGINS=https://app.smartseen.co.za,https://smartseen.co.za,https://www.smartseen.co.za,http://localhost:5173,http://127.0.0.1:5173|' .env || true
 fi
 
+# Ensure celery is installed even when requirements-prod.txt predates it
+pip install -q "celery[redis]>=5.4.0" "redis>=5.0" || true
+
 pm2 restart sma-api --update-env
+# Email worker (dedicated; do not reuse recognition celery processes)
+if pm2 describe sma-email-worker >/dev/null 2>&1; then
+  pm2 restart sma-email-worker --update-env
+else
+  pm2 start .venv/bin/celery \
+    --name sma-email-worker \
+    --cwd "$APP" \
+    --interpreter none \
+    -- \
+    -A app.workers.celery_app.celery worker -Q sma_email -c 2 -l INFO
+fi
+pm2 save || true
 sleep 2
 curl -sf -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:8083/health || {
   echo "Health check failed"
@@ -78,8 +97,9 @@ curl -sf -o /dev/null -w "health:%{http_code}\n" http://127.0.0.1:8083/health ||
   exit 1
 }
 
-# Re-attach ngrok SMA tunnel if helper exists
+# Re-attach / report SMA ngrok URL (pm2 restart alone does not change this)
 if [[ -x "$ROOT/start-ngrok-sma-tunnel.sh" ]]; then
+  echo "ngrok:"
   "$ROOT/start-ngrok-sma-tunnel.sh" || true
 fi
 

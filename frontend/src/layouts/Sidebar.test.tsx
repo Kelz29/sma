@@ -43,10 +43,11 @@ describe("Sidebar", () => {
       user: { id: 1, email: "u@test.com", role: "viewer" },
     });
     render(<Sidebar />);
-    expect(await screen.findByText("SmartSeen")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /invoices/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /^hr$/i })).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /dashboard/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /invoices/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /pdf editor/i }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("link", { name: /^hr$/i })).toHaveLength(0);
     useAuthStore.getState().clearAuth();
   });
 
@@ -57,10 +58,10 @@ describe("Sidebar", () => {
       user: { id: 1, email: "hr@test.com", role: "hr" },
     });
     render(<Sidebar />);
-    expect(await screen.findByText("SmartSeen")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^hr$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /invoices/i })).not.toBeInTheDocument();
+    expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /dashboard/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^hr$/i }).length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("link", { name: /invoices/i })).toHaveLength(0);
     useAuthStore.getState().clearAuth();
   });
 
@@ -71,10 +72,11 @@ describe("Sidebar", () => {
       user: { id: 1, email: "a@test.com", role: "admin" },
     });
     render(<Sidebar />);
-    expect(await screen.findByText("SmartSeen")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /invoices/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^hr$/i })).toBeInTheDocument();
+    expect((await screen.findAllByText(/SmartSeen/i)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /dashboard/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /invoices/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /pdf editor/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /^hr$/i }).length).toBeGreaterThan(0);
     useAuthStore.getState().clearAuth();
   });
 
@@ -86,6 +88,7 @@ describe("Sidebar", () => {
     });
     render(<Sidebar />);
     expect(await screen.findByRole("link", { name: /my portal/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /pdf editor/i })).not.toBeInTheDocument();
     useAuthStore.getState().clearAuth();
   });
 

@@ -93,7 +93,7 @@ export function TeamPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
           <p className="text-sm text-muted-foreground">
-            Manage users in your company. New users are added as employees automatically. Only company admins can add or change users.
+            Manage users in your company. New users get an invite email with sign-in details and are added as employees automatically.
           </p>
         </div>
         <button
@@ -128,11 +128,11 @@ export function TeamPage() {
               {users.map((u) => (
                 <tr key={u.id}>
                   <td className="px-4 py-2 font-medium">{u.email}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{u.full_name ?? "—"}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{u.full_name ?? ""}</td>
                   <td className="px-4 py-2">
                     <span className="rounded bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-800 dark:text-slate-200">{u.role}</span>
                   </td>
-                  <td className="px-4 py-2">{u.is_owner ? "Yes" : "—"}</td>
+                  <td className="px-4 py-2">{u.is_owner ? "Yes" : ""}</td>
                   <td className="px-4 py-2">
                     {!u.is_owner && (
                       <div className="flex flex-wrap gap-2">

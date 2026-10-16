@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,7 @@ from app.db.models.hr import Employee, Payslip
 from app.db.models.tenant import Tenant
 from app.middleware.tenant_context import get_current_tenant_id
 from app.schemas.hr import PayslipGenerate, PayslipRead
-from app.utils.payroll import net_after_paye_uif
+from app.utils.payroll import net_after_paye_uif, sa_tax_year_start, sum_payslip_ytd
 from app.utils.payslip_html import build_payslip_html
 from app.utils.pdf import render_invoice_pdf
 
@@ -22,6 +22,21 @@ def _get_tenant_id_or_400() -> int:
   if not tenant_id:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant not resolved")
   return tenant_id
+
+
+def _ytd_for_payslip(db: Session, p: Payslip) -> tuple[Decimal, Decimal]:
+  year_start = sa_tax_year_start(p.period_start)
+  slips = (
+    db.query(Payslip)
+    .filter(
+      Payslip.tenant_id == p.tenant_id,
+      Payslip.employee_id == p.employee_id,
+      Payslip.period_start >= year_start,
+      Payslip.period_start <= p.period_start,
+    )
+    .all()
+  )
+  return sum_payslip_ytd(slips, through_period_start=p.period_start)
 
 
 def _payslip_read(p: Payslip, employee_name: str | None = None) -> PayslipRead:
@@ -100,6 +115,7 @@ def get_payslip(
 def generate_payslip(
   payload: PayslipGenerate,
   db: Session = Depends(deps.get_db),
+  response: Response = None,
   ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
   tenant_id = _get_tenant_id_or_400()
@@ -117,7 +133,18 @@ def generate_payslip(
   age_group = (payload.age_group or "under65").strip() or "under65"
   if age_group not in ("under65", "65-74", "75+"):
     age_group = "under65"
-  paye, uif_emp, uif_emplr, net = net_after_paye_uif(gross, age_group)
+  hours_worked_per_month = (
+    Decimal(str(payload.hours_worked_per_month))
+    if payload.hours_worked_per_month is not None
+    else None
+  )
+  paye, uif_emp, uif_emplr, net = net_after_paye_uif(
+    gross,
+    age_group,
+    hours_worked_per_month=hours_worked_per_month,
+    uif_exempt=bool(payload.uif_exempt),
+    for_date=payload.period_start,
+  )
   existing = (
     db.query(Payslip)
     .filter(
@@ -127,16 +154,23 @@ def generate_payslip(
     )
     .first()
   )
+  # Core rows are rendered by the PDF template; keep line_items for extras only.
+  line_items: list | None = None
   if existing:
-    raise HTTPException(
-      status_code=status.HTTP_400_BAD_REQUEST,
-      detail="Payslip already exists for this period",
-    )
-  line_items = [
-    {"label": "Gross pay", "amount": float(gross)},
-    {"label": "PAYE", "amount": -float(paye)},
-    {"label": "UIF (employee)", "amount": -float(uif_emp)},
-  ]
+    existing.period_end = payload.period_end
+    existing.gross = gross
+    existing.paye = paye
+    existing.uif_employee = uif_emp
+    existing.uif_employer = uif_emplr
+    existing.net = net
+    existing.currency = emp.currency or "ZAR"
+    existing.line_items = line_items
+    db.commit()
+    db.refresh(existing)
+    if response is not None:
+      response.status_code = status.HTTP_200_OK
+    return _payslip_read(existing, f"{emp.first_name} {emp.last_name}".strip())
+
   p = Payslip(
     tenant_id=tenant_id,
     employee_id=payload.employee_id,
@@ -159,6 +193,7 @@ def generate_payslip(
 @router.get("/{payslip_id}/pdf")
 def get_payslip_pdf(
   payslip_id: int,
+  theme: str = Query("classic", description="PDF layout: classic, modern, or minimal"),
   db: Session = Depends(deps.get_db),
   ctx=Depends(deps.require_role(["admin", "accountant"])),
 ):
@@ -183,8 +218,12 @@ def get_payslip_pdf(
   tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
   company_name = tenant.name if tenant else "Company"
   company_address = getattr(tenant, "address", None) or None
+  company_registration_number = getattr(tenant, "company_registration_number", None) or None
+  company_logo_url = getattr(tenant, "logo_url", None) if tenant else None
+  ytd_tax, ytd_earnings = _ytd_for_payslip(db, p)
   html = build_payslip_html(
     company_name=company_name,
+    company_registration_number=company_registration_number,
     employee_name=f"{emp.first_name} {emp.last_name}".strip() if emp else "—",
     employee_number=emp.employee_number if emp else "—",
     period_start=p.period_start,
@@ -197,6 +236,10 @@ def get_payslip_pdf(
     currency=p.currency or "ZAR",
     line_items=p.line_items if isinstance(p.line_items, list) else None,
     company_address=company_address,
+    company_logo_url=company_logo_url,
+    theme=theme,
+    ytd_tax=ytd_tax,
+    ytd_earnings=ytd_earnings,
   )
   pdf_bytes = render_invoice_pdf(html_body=html)
   return StreamingResponse(

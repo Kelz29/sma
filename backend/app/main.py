@@ -29,6 +29,7 @@ from app.api.v1 import payslips as payslips_router
 from app.api.v1 import portal as portal_router
 from app.api.v1 import reports as reports_router
 from app.api.v1 import sales as sales_router
+from app.api.v1 import telemetry as telemetry_router
 from app.middleware.monitoring import MonitoringMiddleware
 from app.middleware.request_context import RequestContextMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -106,6 +107,8 @@ app.include_router(payslips_router.router, prefix=f"{settings.API_V1_STR}/paysli
 app.include_router(portal_router.router, prefix=f"{settings.API_V1_STR}/portal")
 app.include_router(reports_router.router, prefix=f"{settings.API_V1_STR}/reports")
 app.include_router(sales_router.router, prefix=settings.API_V1_STR)
+app.include_router(telemetry_router.router, prefix=f"{settings.API_V1_STR}/telemetry")
+app.include_router(telemetry_router.admin_router, prefix=f"{settings.API_V1_STR}/admin")
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.join(settings.UPLOAD_DIR, "avatars"), exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
@@ -137,6 +140,12 @@ async def global_exception_handler(request: Request, exc: Exception):
   logger = get_logger(__name__)
   logger.exception("Unhandled exception", path=request.url.path, method=request.method)
   record_error()
+  try:
+    from app.utils.telemetry import note_api_error
+
+    note_api_error(request, 500)
+  except Exception:
+    logger.exception("Failed to record api_error")
   return JSONResponse(
     status_code=500,
     content={"detail": "An internal error occurred. Please try again later."},

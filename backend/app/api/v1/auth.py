@@ -12,10 +12,15 @@ from app.core.security import create_access_token
 from app.db.models.tenant import Tenant, TenantStatus
 from app.db.models.user import EmailVerificationToken, TenantUser, User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, MeResponse, MeUpdate, RegisterRequest, Token
-from app.utils.email_sender import send_welcome_email
+from app.utils.email_queue import (
+  KIND_EMAIL_CONFIRMED,
+  KIND_WELCOME_VERIFY,
+  enqueue_email,
+)
 from app.utils.password import get_password_hash, verify_password
 from app.core.redis_client import cache_delete
 from app.utils.rate_limit import check_auth_rate_limit
+from app.utils.telemetry import record_action
 
 router = APIRouter(tags=["auth"])
 
@@ -58,6 +63,13 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
   access_token = create_access_token(
     subject=str(user.id),
+    tenant_id=tenant.id,
+    role=tenant_link.role,
+  )
+  record_action(
+    action="signed_in",
+    path="/api/v1/auth/login",
+    user_id=user.id,
     tenant_id=tenant.id,
     role=tenant_link.role,
   )
@@ -137,7 +149,7 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
   db.add(tenant_link)
   db.commit()
 
-  # Welcome email (SmartSeen theme, "Powered by Smart Macmane"). New users get verification link.
+  # Welcome + verify email via outbox (never block registration on SMTP).
   verify_url = None
   if new_user_created:
     token = secrets.token_urlsafe(32)
@@ -147,17 +159,26 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
     db.commit()
     base_url = (getattr(settings, "APP_BASE_URL", None) or "").rstrip("/")
     verify_url = f"{base_url}/verify-email?token={token}" if base_url else None
-  try:
-    send_welcome_email(
-      to_email=user.email,
-      full_name=user.full_name,
-      verify_url=verify_url,
-    )
-  except Exception:
-    pass  # Don't fail registration if email fails
+    try:
+      enqueue_email(
+        db,
+        kind=KIND_WELCOME_VERIFY,
+        to_email=user.email,
+        payload={"full_name": user.full_name, "verify_url": verify_url},
+        idempotency_key=f"welcome_verify:{user.id}",
+      )
+    except Exception:
+      pass  # Don't fail registration if enqueue fails
 
   access_token = create_access_token(
     subject=str(user.id),
+    tenant_id=tenant.id,
+    role=role,
+  )
+  record_action(
+    action="registered",
+    path="/api/v1/auth/register",
+    user_id=user.id,
     tenant_id=tenant.id,
     role=role,
   )
@@ -186,6 +207,16 @@ def verify_email(token: str = Query(..., alias="token"), db: Session = Depends(g
   db.add(user)
   db.delete(ev)
   db.commit()
+  try:
+    enqueue_email(
+      db,
+      kind=KIND_EMAIL_CONFIRMED,
+      to_email=user.email,
+      payload={"full_name": user.full_name},
+      idempotency_key=f"email_confirmed:{user.id}",
+    )
+  except Exception:
+    pass
   return {"detail": "Email verified successfully"}
 
 

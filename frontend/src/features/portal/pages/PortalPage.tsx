@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { formatAmount } from "@/lib/currency";
+import { PAYSLIP_PDF_THEMES, type PayslipPdfTheme } from "@/lib/payslipPdfThemes";
 
 function getPortalAvatarUrl(avatarUrl: string | null | undefined): string {
   if (!avatarUrl) return "";
@@ -164,6 +165,7 @@ export function PortalPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [payslipError, setPayslipError] = useState<string | null>(null);
+  const [payslipPdfTheme, setPayslipPdfTheme] = useState<PayslipPdfTheme>("classic");
 
   const updateProfileMutation = useMutation({
     mutationFn: async (body: Partial<Profile>) => {
@@ -186,11 +188,14 @@ export function PortalPage() {
   const downloadPayslipPdf = async (payslipId: number) => {
     setPayslipError(null);
     try {
-      const res = await api.get(`/portal/payslips/${payslipId}/pdf`, { responseType: "blob" });
+      const res = await api.get(`/portal/payslips/${payslipId}/pdf`, {
+        params: { theme: payslipPdfTheme },
+        responseType: "blob",
+      });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `payslip-${payslipId}.pdf`;
+      a.download = `payslip-${payslipId}-${payslipPdfTheme}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -281,47 +286,47 @@ export function PortalPage() {
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Email</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.email ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.email ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">ID number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.id_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.id_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Passport number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.passport_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Tax number</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.tax_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Department</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.department ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.department ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Job title</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.job_title ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.job_title ?? ""}</dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs font-medium text-slate-500 uppercase">Address</dt>
-                      <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600 whitespace-pre-wrap">{profile.address ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Phone</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.phone ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.phone ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Bank name</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.bank_name ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Bank account number</dt>
-                      <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600 font-mono text-sm">{profile.bank_account_number ?? ""}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-slate-500 uppercase">Branch code</dt>
-                      <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? "—"}</dd>
+                      <dd className="mt-0.5 text-slate-600">{profile.bank_branch_code ?? ""}</dd>
                     </div>
                   </dl>
                 ) : (
@@ -476,8 +481,8 @@ export function PortalPage() {
                   {attendance.map((a) => (
                     <tr key={a.id}>
                       <td className="py-2 pl-4">{a.date}</td>
-                      <td className="py-2 px-4">{a.check_in ?? "—"}</td>
-                      <td className="py-2 px-4">{a.check_out ?? "—"}</td>
+                      <td className="py-2 px-4">{a.check_in ?? ""}</td>
+                      <td className="py-2 px-4">{a.check_out ?? ""}</td>
                       <td className="py-2 pr-4">
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 capitalize">{a.status}</span>
                       </td>
@@ -497,6 +502,23 @@ export function PortalPage() {
               {payslipError}
             </div>
           )}
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
+            <label htmlFor="portal-payslip-pdf-theme" className="font-medium text-slate-700">
+              PDF design
+            </label>
+            <select
+              id="portal-payslip-pdf-theme"
+              value={payslipPdfTheme}
+              onChange={(e) => setPayslipPdfTheme(e.target.value as PayslipPdfTheme)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            >
+              {PAYSLIP_PDF_THEMES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           {!payslips?.length ? (
             <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">No payslips yet. Your monthly payslips will appear here once generated by your company.</div>
@@ -514,7 +536,7 @@ export function PortalPage() {
                 <tbody className="divide-y divide-slate-100">
                   {payslips.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/50">
-                      <td className="py-3 pl-4 text-slate-600">{p.period_start} – {p.period_end}</td>
+                      <td className="py-3 pl-4 text-slate-600">{p.period_start} to {p.period_end}</td>
                       <td className="py-3 px-4 text-right text-slate-800">{formatAmount(Number(p.gross), p.currency)}</td>
                       <td className="py-3 px-4 text-right font-medium text-slate-900">{formatAmount(Number(p.net), p.currency)}</td>
                       <td className="py-3 pr-4 text-right">

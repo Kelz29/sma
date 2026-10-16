@@ -237,10 +237,10 @@ export function HRPage() {
                   <tr key={emp.id} className="hover:bg-slate-50/50">
                     <td className="py-3 pl-4 font-mono text-slate-600">{emp.employee_number}</td>
                     <td className="py-3 px-4 font-medium text-slate-900">{emp.first_name} {emp.last_name}</td>
-                    <td className="py-3 px-4 text-slate-600">{emp.department ?? "—"}</td>
-                    <td className="py-3 px-4 text-slate-600">{emp.job_title ?? "—"}</td>
+                    <td className="py-3 px-4 text-slate-600">{emp.department ?? ""}</td>
+                    <td className="py-3 px-4 text-slate-600">{emp.job_title ?? ""}</td>
                     <td className="py-3 px-4 text-right text-slate-800">
-                      {emp.salary != null ? formatAmount(Number(emp.salary), emp.currency ?? BASE_CURRENCY_CODE) : "—"}
+                      {emp.salary != null ? formatAmount(Number(emp.salary), emp.currency ?? BASE_CURRENCY_CODE) : ""}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${emp.is_active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
@@ -306,7 +306,7 @@ export function HRPage() {
               <ul className="flex flex-wrap gap-2">
                 {leaveTypes.map((lt) => (
                   <li key={lt.id} className="rounded-lg bg-slate-100 dark:bg-slate-700/50 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300">
-                    {lt.name} — {lt.days_per_year} days/year{lt.carry_over ? " · carry over" : ""}
+                    {lt.name}: {lt.days_per_year} days/year{lt.carry_over ? " · carry over" : ""}
                   </li>
                 ))}
               </ul>
@@ -367,7 +367,7 @@ export function HRPage() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-slate-400" />
                         )}
                       </td>
                     </tr>
@@ -461,7 +461,7 @@ export function HRPage() {
                           <td className="py-2 pl-4">{row.date}</td>
                           <td className="py-2 px-4 capitalize">{row.status}</td>
                           <td className="py-2 pr-4 text-slate-600 text-xs">
-                            {row.notes || "—"}
+                            {row.notes || ""}
                           </td>
                         </tr>
                       ))}
