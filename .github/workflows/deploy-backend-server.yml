@@ -1,0 +1,32 @@
+name: Deploy backend (server)
+
+# Manual backend deploy on the home server via the self-hosted runner
+# (equivalent to running ~/Documents/sma/deploy.sh on the server). Use this
+# when the SSH-based deploy-backend workflow is unavailable.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Deploy SMA backend on home server
+        run: |
+          set -euo pipefail
+          ROOT="$HOME/Documents/sma"
+          REPO="$ROOT/repo"
+          mkdir -p "$ROOT/logs"
+          if [[ ! -d "$REPO/.git" ]]; then
+            git clone --branch main https://github.com/Kelz29/sma.git "$REPO"
+          fi
+          git -C "$REPO" fetch origin main
+          git -C "$REPO" checkout main
+          git -C "$REPO" reset --hard origin/main
+          install -m 755 "$REPO/deploy/deploy.sh" "$ROOT/deploy.sh"
+          "$ROOT/deploy.sh"
+          echo "== backend deploy done =="
+          tail -n 5 "$ROOT/logs/deploy.log" || true

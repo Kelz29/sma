@@ -109,19 +109,30 @@ def _send_smtp(msg: MIMEMultipart, to_email: str) -> None:
   password = settings.SMTP_PASSWORD or ""
   use_ssl = bool(getattr(settings, "SMTP_USE_SSL", False)) or port == 465
 
-  if use_ssl:
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(host, port, context=context) as smtp:
-      if user and password:
-        smtp.login(user, password)
-      smtp.sendmail(_envelope_from(), [to_email], msg.as_string())
-  else:
-    with smtplib.SMTP(host, port, timeout=30) as smtp:
+  # Do NOT use smtplib's context manager: since Python 3.13 its __exit__ raises
+  # SMTPResponseException when QUIT is not answered with 221, and some servers
+  # (e.g. spe.ucebox.co.za) reply "250 Reset OK" — which marked successfully
+  # delivered mail as failed in the outbox. Close best-effort instead.
+  smtp: smtplib.SMTP | None = None
+  try:
+    if use_ssl:
+      smtp = smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=30)
+    else:
+      smtp = smtplib.SMTP(host, port, timeout=30)
       if port == 587 or not use_ssl:
         smtp.starttls(context=ssl.create_default_context())
-      if user and password:
-        smtp.login(user, password)
-      smtp.sendmail(_envelope_from(), [to_email], msg.as_string())
+    if user and password:
+      smtp.login(user, password)
+    smtp.sendmail(_envelope_from(), [to_email], msg.as_string())
+  finally:
+    if smtp is not None:
+      try:
+        smtp.quit()
+      except Exception:
+        try:
+          smtp.close()
+        except Exception:
+          pass
 
 
 def send_welcome_email(

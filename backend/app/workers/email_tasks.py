@@ -86,6 +86,17 @@ def process_email_job(job_id: int) -> str:
     db.close()
 
 
-@celery.task(name="app.workers.email_tasks.send_email_job", bind=True, max_retries=0)
-def send_email_job(self, job_id: int) -> str:  # noqa: ARG001
-  return process_email_job(job_id)
+@celery.task(name="app.workers.email_tasks.send_email_job", bind=True, max_retries=4)
+def send_email_job(self, job_id: int) -> str:
+  """Send one outbox job; retry transient SMTP failures with backoff.
+
+  process_email_job already increments the DB attempt counter and returns the
+  row to 'pending' on failure; without a Celery retry nothing would ever
+  re-dispatch it, so a single failure stranded the email forever.
+  """
+  try:
+    return process_email_job(job_id)
+  except Exception as exc:
+    if self.request.retries >= self.max_retries:
+      raise
+    raise self.retry(exc=exc, countdown=min(60 * (2**self.request.retries), 900))
