@@ -37,3 +37,8 @@ jobs:
           echo "--- out log ---"
           tail -n 40 "$HOME/.pm2/logs/cf-login-out.log" 2>/dev/null || echo "(none)"
           ls -la "$HOME/.cloudflared/" 2>/dev/null || echo "(no .cloudflared dir)"
+          echo "== cloudflare reachability from server =="
+          for h in login.cloudflareaccess.org api.cloudflare.com dash.cloudflare.com region1.v2.argotunnel.com; do
+            echo -n "$h: "
+            curl -s -o /dev/null -m 8 -w "%{http_code} (%{time_total}s)\n" "https://$h/" || echo "UNREACHABLE"
+          done
