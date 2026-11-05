@@ -80,10 +80,14 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(TenantContextMiddleware)
 # Last registered = outermost = runs first on the request (handles preflight before other middleware).
+# Never combine allow_origins=["*"] with allow_credentials=True: browsers reject
+# `Access-Control-Allow-Origin: *` on credentialed requests (the frontend uses
+# withCredentials), which surfaces as a CORS error. Reflect any origin via regex instead.
+_allow_all_origins = _origins == ["*"]
 app.add_middleware(
   CORSMiddleware,
-  allow_origins=_origins if _origins != ["*"] else ["*"],
-  allow_origin_regex=_SMARTSEEN_ORIGIN_RE if _origins != ["*"] else None,
+  allow_origins=[] if _allow_all_origins else _origins,
+  allow_origin_regex=r".*" if _allow_all_origins else _SMARTSEEN_ORIGIN_RE,
   allow_credentials=True,
   allow_methods=["*"],
   allow_headers=["*"],

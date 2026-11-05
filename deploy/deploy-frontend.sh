@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the SmartSeen frontend from GitHub main and upload it to cPanel.
-# Bakes the current SMA ngrok URL into VITE_API_URL.
+# Bakes SMA_API_URL (stable API origin, preferred) or the current SMA ngrok URL into VITE_API_URL.
 # Keeps FTP credentials in $SMA_ROOT/frontend-ftp.env (never in git).
 set -euo pipefail
 
@@ -47,16 +47,24 @@ if [[ -z "${FTP_HOST:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$ROOT/start-ngrok-sma-tunnel.sh" ]]; then
-  echo "Missing $ROOT/start-ngrok-sma-tunnel.sh" >&2
-  exit 1
+# Prefer a stable API origin (e.g. SMA_API_URL=https://api.smartseen.co.za/api/v1 via
+# Cloudflare Tunnel or an ngrok reserved domain). Free ngrok URLs rotate whenever the
+# agent restarts; baking one in strands the deployed frontend on a dead endpoint whose
+# error page has no CORS headers, so login fails in the browser as a "CORS error".
+if [[ -n "${SMA_API_URL:-}" ]]; then
+  API="${SMA_API_URL%/}"
+else
+  if [[ ! -x "$ROOT/start-ngrok-sma-tunnel.sh" ]]; then
+    echo "Missing $ROOT/start-ngrok-sma-tunnel.sh" >&2
+    exit 1
+  fi
+  URL=$("$ROOT/start-ngrok-sma-tunnel.sh" | tail -n1 | tr -d '[:space:]')
+  if [[ "$URL" != https://* ]]; then
+    echo "Could not read SMA ngrok URL (got: ${URL:-empty})" >&2
+    exit 1
+  fi
+  API="${URL%/}/api/v1"
 fi
-URL=$("$ROOT/start-ngrok-sma-tunnel.sh" | tail -n1 | tr -d '[:space:]')
-if [[ "$URL" != https://* ]]; then
-  echo "Could not read SMA ngrok URL (got: ${URL:-empty})" >&2
-  exit 1
-fi
-API="${URL%/}/api/v1"
 echo "$API" > "$ROOT/frontend-api-url.txt"
 echo "VITE_API_URL=$API"
 

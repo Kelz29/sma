@@ -79,10 +79,20 @@ export function LoginPage() {
       else if (role === "superadmin") navigate("/superadmin");
       else navigate("/dashboard");
     } catch (e: unknown) {
+      const response =
+        e && typeof e === "object" && "response" in e
+          ? (e as { response?: unknown }).response
+          : undefined;
+      const detail =
+        response && typeof response === "object" && "data" in response && response.data && typeof response.data === "object" && "detail" in response.data
+          ? String((response.data as { detail: unknown }).detail)
+          : null;
       const msg =
-        e && typeof e === "object" && "response" in e && e.response && typeof e.response === "object" && "data" in e.response && e.response.data && typeof e.response.data === "object" && "detail" in e.response.data
-          ? String((e.response.data as { detail: unknown }).detail)
-          : "Login failed. Check your credentials, tenant slug, and backend.";
+        detail ??
+        (response
+          ? "Login failed. Check your credentials and tenant slug."
+          : // No response at all: API unreachable or blocked by CORS (e.g. tunnel offline).
+            "Cannot reach the server. Check your connection and try again.");
       setError(msg);
     } finally {
       setIsSubmitting(false);

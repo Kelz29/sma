@@ -39,6 +39,18 @@ describe("LoginPage", () => {
     await user.type(screen.getByLabelText(/password/i), "pass");
     await user.type(screen.getByLabelText(/tenant slug/i), "demo");
     await user.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(await screen.findByText(/Login failed/i)).toBeInTheDocument();
+    // No response object = network/CORS failure, not bad credentials.
+    expect(await screen.findByText(/Cannot reach the server/i)).toBeInTheDocument();
+  });
+
+  it("shows server detail when login is rejected", async () => {
+    vi.mocked(api.post).mockRejectedValue({ response: { data: { detail: "Invalid credentials" } } });
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText(/email/i), "test@example.com");
+    await user.type(screen.getByLabelText(/password/i), "pass");
+    await user.type(screen.getByLabelText(/tenant slug/i), "demo");
+    await user.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(await screen.findByText(/Invalid credentials/i)).toBeInTheDocument();
   });
 });
