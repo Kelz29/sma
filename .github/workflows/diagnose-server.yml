@@ -39,6 +39,31 @@ jobs:
           echo "--- out log ---"
           tail -n 40 "$HOME/.pm2/logs/cf-login-out.log" 2>/dev/null || echo "(none)"
           ls -la "$HOME/.cloudflared/" 2>/dev/null || echo "(no .cloudflared dir)"
+          echo "== email pipeline =="
+          ENVF="$HOME/Documents/sma/backend/.env"
+          for k in ENVIRONMENT APP_BASE_URL SMTP_HOST SMTP_PORT SMTP_USE_SSL REDIS_URL CELERY_BROKER_URL USE_SQLITE; do
+            echo -n "$k="; grep -E "^$k=" "$ENVF" 2>/dev/null | head -1 | cut -d= -f2- || echo "(unset)"
+          done
+          for k in SMTP_USER SMTP_PASSWORD SMTP_FROM; do
+            if grep -qE "^$k=.+" "$ENVF" 2>/dev/null; then echo "$k=(set)"; else echo "$k=(MISSING/empty)"; fi
+          done
+          echo "--- redis ---"
+          redis-cli -n 1 ping 2>&1 | head -1 || echo "(redis-cli failed)"
+          redis-cli -n 1 LLEN sma_email 2>&1 | head -1 || true
+          echo "--- sma-email-worker logs ---"
+          pm2 logs sma-email-worker --nostream --lines 30 2>/dev/null | tail -35 || echo "(no worker)"
+          echo "--- recent outbox rows ---"
+          cd "$HOME/Documents/sma/backend" && .venv/bin/python -c "
+          from app.db.session import SessionLocal
+          from app.db.models.email_outbox import EmailOutbox
+          db = SessionLocal()
+          rows = db.query(EmailOutbox).order_by(EmailOutbox.id.desc()).limit(10).all()
+          print('total shown:', len(rows))
+          for r in rows:
+              err = (r.last_error or '')[:180].replace(chr(10),' ')
+              print(r.id, r.kind, r.to_email, r.status, 'attempts='+str(r.attempts), 'err='+err)
+          db.close()
+          " 2>&1 | tail -15
           echo "== cloudflare reachability from server =="
           for h in login.cloudflareaccess.org api.cloudflare.com dash.cloudflare.com region1.v2.argotunnel.com; do
             echo -n "$h: "
