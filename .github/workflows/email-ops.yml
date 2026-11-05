@@ -1,0 +1,92 @@
+name: Email ops
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Operation"
+        type: choice
+        required: true
+        options:
+          - stop-worker
+          - update-password-and-drain
+          - drain
+
+jobs:
+  ops:
+    runs-on: [self-hosted, linux, sma]
+    env:
+      NEW_SMTP_PASSWORD: ${{ secrets.SMA_SMTP_PASSWORD }}
+    steps:
+      - name: Run email operation
+        run: |
+          set -euo pipefail
+          APP="$HOME/Documents/sma/backend"
+          ACTION="${{ inputs.action }}"
+
+          if [[ "$ACTION" == "stop-worker" ]]; then
+            pm2 stop sma-email-worker || true
+            pm2 describe sma-email-worker | grep -E "status" || true
+            echo "worker stopped (prevents extending the SMTP brute-force lockout)"
+            exit 0
+          fi
+
+          if [[ "$ACTION" == "update-password-and-drain" ]]; then
+            if [[ -z "${NEW_SMTP_PASSWORD:-}" ]]; then
+              echo "ERROR: GitHub secret SMA_SMTP_PASSWORD is not set" >&2
+              exit 1
+            fi
+            echo "::add-mask::$NEW_SMTP_PASSWORD"
+            cd "$APP"
+            NEW_SMTP_PASSWORD="$NEW_SMTP_PASSWORD" .venv/bin/python - <<'PY'
+          import os, re
+          path = ".env"
+          pw = os.environ["NEW_SMTP_PASSWORD"]
+          text = open(path).read()
+          if re.search(r"^SMTP_PASSWORD=.*$", text, flags=re.M):
+              text = re.sub(r"^SMTP_PASSWORD=.*$", "SMTP_PASSWORD=" + pw, text, flags=re.M)
+          else:
+              text += "\nSMTP_PASSWORD=" + pw + "\n"
+          open(path + ".bak", "w").write(open(path).read())
+          open(path, "w").write(text)
+          print("SMTP_PASSWORD updated in .env (backup at .env.bak)")
+          PY
+          fi
+
+          echo "== restart api + email worker =="
+          pm2 restart sma-api --update-env || true
+          pm2 restart sma-email-worker --update-env
+          sleep 3
+
+          echo "== drain outbox (pending/failed/stale-sending) + rows after =="
+          cd "$APP"
+          .venv/bin/python - <<'PY'
+          from datetime import datetime, timedelta
+          from app.db.session import SessionLocal
+          from app.db.models.email_outbox import EmailOutbox
+          from app.workers.email_tasks import process_email_job
+
+          db = SessionLocal()
+          rows = db.query(EmailOutbox).filter(EmailOutbox.status.in_(("pending", "failed", "sending"))).all()
+          ids = []
+          for r in rows:
+              if r.status == "sending" and r.updated_at and r.updated_at > datetime.utcnow() - timedelta(minutes=10):
+                  continue
+              # Give drained rows a fresh attempt budget after credential fixes.
+              r.attempts = 0
+              if r.status == "sending":
+                  r.status = "pending"
+              ids.append(r.id)
+          db.commit()
+          print("draining ids:", ids)
+          db.close()
+          for jid in ids:
+              try:
+                  print("process", jid, "->", process_email_job(jid))
+              except Exception as e:
+                  print("process", jid, "RAISED", type(e).__name__, str(e)[:200])
+          db = SessionLocal()
+          for r in db.query(EmailOutbox).order_by(EmailOutbox.id.desc()).limit(8).all():
+              print(r.id, r.kind, r.to_email, r.status, "attempts=" + str(r.attempts), "err=" + (r.last_error or "")[:150])
+          db.close()
+          PY

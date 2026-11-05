@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.config import settings
 from app.db.models.email_outbox import EmailOutbox
@@ -26,7 +26,13 @@ def process_email_job(job_id: int) -> str:
       return "missing"
     if job.status == "sent":
       return "already_sent"
-    if job.status == "sending":
+    # A row stranded in 'sending' (worker died mid-send) may be reclaimed after 10 min.
+    stale_sending = (
+      job.status == "sending"
+      and job.updated_at is not None
+      and job.updated_at < datetime.utcnow() - timedelta(minutes=10)
+    )
+    if job.status == "sending" and not stale_sending:
       return "busy"
 
     max_attempts = int(getattr(settings, "EMAIL_MAX_ATTEMPTS", 5) or 5)
@@ -34,11 +40,16 @@ def process_email_job(job_id: int) -> str:
       return "max_attempts"
 
     # Optimistic claim
+    claimable = (
+      EmailOutbox.status.in_(("pending", "failed"))
+      if not stale_sending
+      else (EmailOutbox.status == "sending")
+    )
     updated = (
       db.query(EmailOutbox)
       .filter(
         EmailOutbox.id == job_id,
-        EmailOutbox.status.in_(("pending", "failed")),
+        claimable,
       )
       .update(
         {

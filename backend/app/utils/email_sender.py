@@ -122,7 +122,12 @@ def _send_smtp(msg: MIMEMultipart, to_email: str) -> None:
       if port == 587 or not use_ssl:
         smtp.starttls(context=ssl.create_default_context())
     if user and password:
-      smtp.login(user, password)
+      code, resp = smtp.login(user, password)
+      # smtplib.login() does not raise for some non-235 replies (e.g. a 503
+      # brute-force denial), leaving the session unauthenticated so MAIL FROM
+      # then fails with a misleading 535. Treat anything but 235 as auth failure.
+      if code != 235:
+        raise smtplib.SMTPAuthenticationError(code, resp)
     smtp.sendmail(_envelope_from(), [to_email], msg.as_string())
   finally:
     if smtp is not None:

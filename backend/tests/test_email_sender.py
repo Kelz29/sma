@@ -28,8 +28,11 @@ class _FakeSMTP:
     # What Python 3.13+ smtplib does when QUIT is not answered with 221.
     raise smtplib.SMTPResponseException(250, b"Reset OK")
 
+  login_result = (235, b"Authentication successful")
+
   def login(self, user, password):
     self.logged_in = True
+    return self.login_result
 
   def sendmail(self, from_addr, to_addrs, msg):
     self.sent.append((from_addr, to_addrs, msg))
@@ -67,3 +70,27 @@ def test_send_survives_non_221_quit() -> None:
   assert fake.logged_in
   assert len(fake.sent) == 1
   assert fake.sent[0][1] == ["new-user@example.com"]
+
+
+def test_login_non_235_raises() -> None:
+  """smtplib.login() may return (503, brute-force denial) without raising;
+  that must surface as an auth error, not a misleading MAIL FROM 535."""
+  _FakeSMTP.instances.clear()
+  _FakeSMTP.login_result = (503, b"denied due to brute-force attempts")
+  try:
+    with (
+      patch.object(email_sender.settings, "SMTP_HOST", "spe.ucebox.co.za"),
+      patch.object(email_sender.settings, "SMTP_PORT", 465),
+      patch.object(email_sender.settings, "SMTP_USER", "app-no-reply@smartseen.co.za"),
+      patch.object(email_sender.settings, "SMTP_PASSWORD", "secret"),
+      patch.object(email_sender.settings, "SMTP_USE_SSL", True),
+      patch("smtplib.SMTP_SSL", _FakeSMTP),
+    ):
+      try:
+        email_sender.send_welcome_email(to_email="x@example.com")
+        raise AssertionError("expected SMTPAuthenticationError")
+      except smtplib.SMTPAuthenticationError as e:
+        assert e.smtp_code == 503
+    assert _FakeSMTP.instances[0].sent == []
+  finally:
+    _FakeSMTP.login_result = (235, b"Authentication successful")
