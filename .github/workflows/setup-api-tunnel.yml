@@ -1,11 +1,9 @@
 name: Setup API tunnel
 
-# One-shot: cloudflared login (foreground, single job) -> tunnel 'sma-api' ->
-# DNS api.smartseen.co.za -> pm2 service -> frontend redeploy on the stable URL.
-# The login URL is handed off via a run artifact (download requires an
-# authenticated token even though the repo is public — never put it in an
-# issue/PR/file). NOTE: do not run the login under pm2 — cloudflared login
-# expires and pm2 restarts mint a fresh URL, invalidating the previous one.
+# Creates a remotely-managed Cloudflare Tunnel 'sma-api' via the CF API
+# (secret CLOUDFLARE_API_TOKEN), points api.smartseen.co.za at it, runs
+# cloudflared under pm2 -> http://localhost:8083, then redeploys the frontend
+# baked with https://api.smartseen.co.za/api/v1. Idempotent; safe to re-run.
 on:
   workflow_dispatch:
 
@@ -16,82 +14,83 @@ concurrency:
 jobs:
   setup:
     runs-on: [self-hosted, linux, sma]
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - name: Start cloudflared login (background in this job)
+      - name: Create tunnel via API, DNS, service, deploy
         run: |
           set -euo pipefail
-          pm2 delete cf-login >/dev/null 2>&1 || true
-          mkdir -p "$HOME/.cloudflared"
-          if [[ -f "$HOME/.cloudflared/cert.pem" ]]; then
-            echo "cert.pem already exists — skipping login"
-            exit 0
-          fi
-          rm -f /tmp/cf-login.log /tmp/cf-login-url.txt
-          setsid bash -c 'cloudflared tunnel login > /tmp/cf-login.log 2>&1' &
-          for i in $(seq 1 30); do
-            URL=$(grep -oE 'https://dash\.cloudflare\.com[^ "'"'"']*' /tmp/cf-login.log 2>/dev/null | head -n1 || true)
-            [[ -n "$URL" ]] && break
-            sleep 2
-          done
-          if [[ -z "${URL:-}" ]]; then
-            echo "ERROR: login URL not generated" >&2
-            cat /tmp/cf-login.log || true
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            echo "ERROR: GitHub secret CLOUDFLARE_API_TOKEN is not set" >&2
             exit 1
           fi
-          echo "$URL" > /tmp/cf-login-url.txt
-          echo "login URL captured to artifact"
-
-      - name: Upload login URL artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cf-login-url
-          path: /tmp/cf-login-url.txt
-          retention-days: 1
-          if-no-files-found: warn
-
-      - name: Wait for cert, create tunnel, deploy
-        run: |
-          set -euo pipefail
+          echo "::add-mask::$CF_TOKEN"
+          API="https://api.cloudflare.com/client/v4"
+          AUTH="Authorization: Bearer $CF_TOKEN"
           CF="$HOME/.cloudflared"
           mkdir -p "$CF"
+          pm2 delete cf-login >/dev/null 2>&1 || true
 
-          echo "== wait for cert.pem (authorize in browser; up to 25 min) =="
-          for i in $(seq 1 100); do
-            [[ -f "$CF/cert.pem" ]] && break
-            sleep 15
-          done
-          if [[ ! -f "$CF/cert.pem" ]]; then
-            echo "ERROR: cert.pem not found — authorization not completed in time" >&2
-            tail -n 20 /tmp/cf-login.log 2>/dev/null || true
+          echo "== verify token + locate zone =="
+          ZONE_JSON=$(curl -fsS -H "$AUTH" "$API/zones?name=smartseen.co.za")
+          ZONE_ID=$(echo "$ZONE_JSON" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['id'] if r else '')")
+          ACCT_ID=$(echo "$ZONE_JSON" | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; print(r[0]['account']['id'] if r else '')")
+          if [[ -z "$ZONE_ID" || -z "$ACCT_ID" ]]; then
+            echo "ERROR: token cannot see zone smartseen.co.za" >&2
             exit 1
           fi
-          echo "cert.pem present"
+          echo "zone + account located"
 
-          echo "== create tunnel sma-api (idempotent) =="
-          if ! cloudflared tunnel list 2>/dev/null | grep -q "sma-api"; then
-            cloudflared tunnel create sma-api
+          echo "== create/find tunnel sma-api =="
+          TUNNELS=$(curl -fsS -H "$AUTH" "$API/accounts/$ACCT_ID/tunnels?is_deleted=false")
+          TUN_ID=$(echo "$TUNNELS" | python3 -c "
+          import sys,json
+          for t in json.load(sys.stdin).get('result') or []:
+              if t.get('name')=='sma-api': print(t['id']); break
+          else: print('')
+          ")
+          if [[ -z "$TUN_ID" ]]; then
+            TUN_ID=$(curl -fsS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+              "$API/accounts/$ACCT_ID/tunnels" \
+              -d '{"name":"sma-api","config_src":"cloudflare"}' \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['id'])")
+            echo "tunnel created"
+          else
+            echo "tunnel exists, reusing"
           fi
-          UUID=$(basename "$(ls "$CF"/*.json | head -n1)" .json)
-          echo "tunnel UUID: $UUID"
 
-          echo "== write config.yml =="
-          {
-            echo "tunnel: $UUID"
-            echo "credentials-file: $CF/$UUID.json"
-            echo "ingress:"
-            echo "  - hostname: api.smartseen.co.za"
-            echo "    service: http://localhost:8083"
-            echo "  - service: http_status:404"
-          } > "$CF/config.yml"
-          cat "$CF/config.yml"
+          echo "== push tunnel ingress config =="
+          curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json' \
+            "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/configurations" \
+            -d '{"config":{"ingress":[{"hostname":"api.smartseen.co.za","service":"http://localhost:8083"},{"service":"http_status:404"}]}}' \
+            >/dev/null
+          echo "ingress set"
 
-          echo "== route DNS api.smartseen.co.za =="
-          cloudflared tunnel route dns sma-api api.smartseen.co.za || true
+          echo "== DNS CNAME api.smartseen.co.za -> $TUN_ID.cfargotunnel.com =="
+          REC=$(curl -fsS -H "$AUTH" "$API/zones/$ZONE_ID/dns_records?name=api.smartseen.co.za")
+          REC_ID=$(echo "$REC" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result') or []; print(r[0]['id'] if r else '')")
+          BODY="{\"type\":\"CNAME\",\"name\":\"api\",\"content\":\"$TUN_ID.cfargotunnel.com\",\"proxied\":true}"
+          if [[ -n "$REC_ID" ]]; then
+            curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json' "$API/zones/$ZONE_ID/dns_records/$REC_ID" -d "$BODY" >/dev/null
+          else
+            curl -fsS -X POST -H "$AUTH" -H 'Content-Type: application/json' "$API/zones/$ZONE_ID/dns_records" -d "$BODY" >/dev/null
+          fi
+          echo "DNS set"
+
+          echo "== fetch tunnel token to server file (600) =="
+          TUN_TOKEN=$(curl -fsS -H "$AUTH" "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/token" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+          echo "::add-mask::$TUN_TOKEN"
+          umask 077
+          printf '%s' "$TUN_TOKEN" > "$CF/sma-api.token"
+          chmod 600 "$CF/sma-api.token"
 
           echo "== run under pm2 =="
           pm2 delete sma-cloudflared >/dev/null 2>&1 || true
-          pm2 start /usr/local/bin/cloudflared --name sma-cloudflared -- tunnel --config "$CF/config.yml" run sma-api
+          TUNNEL_TOKEN_FILE="$CF/sma-api.token" pm2 start /usr/local/bin/cloudflared --name sma-cloudflared -- tunnel run
           pm2 save
+          sleep 5
+          pm2 describe sma-cloudflared | grep -E "status|restarts" || true
 
           echo "== wait for https://api.smartseen.co.za/health =="
           OK=""
