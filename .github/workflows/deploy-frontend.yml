@@ -1,12 +1,10 @@
 name: Deploy frontend
 
+# Manual only: rebuilds the frontend with the CURRENT ngrok URL (or SMA_API_URL
+# if set on the server) and FTP-uploads it to cPanel (app.smartseen.co.za).
+# Run this whenever the ngrok tunnel URL changes — otherwise the live site
+# keeps calling a dead endpoint and login fails as a browser "CORS error".
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - "deploy/**"
-      - ".github/workflows/deploy-frontend.yml"
   workflow_dispatch:
 
 concurrency:
@@ -15,21 +13,16 @@ concurrency:
 
 jobs:
   deploy:
-    # Same home-server runner as the backend. Self-hosted jobs do not use
-    # GitHub-hosted minutes, so this does not need a billing plan.
-    runs-on: [self-hosted, linux, sma]
+    runs-on: ubuntu-latest
     steps:
-      - name: Deploy SMA frontend to cPanel
-        run: |
-          set -euo pipefail
-          ROOT="$HOME/Documents/sma"
-          REPO="$ROOT/repo"
-          mkdir -p "$ROOT/logs"
-          if [[ ! -d "$REPO/.git" ]]; then
-            git clone --branch main https://github.com/Kelz29/sma.git "$REPO"
-          fi
-          git -C "$REPO" fetch origin main
-          git -C "$REPO" checkout main
-          git -C "$REPO" reset --hard origin/main
-          install -m 755 "$REPO/deploy/deploy-frontend.sh" "$ROOT/deploy-frontend.sh"
-          "$ROOT/deploy-frontend.sh"
+      - name: Deploy SMA frontend via home server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SMA_SSH_HOST }}
+          username: ${{ secrets.SMA_SSH_USER }}
+          key: ${{ secrets.SMA_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            ~/Documents/sma/deploy-frontend.sh
