@@ -52,6 +52,23 @@ jobs:
           redis-cli -n 1 LLEN sma_email 2>&1 | head -1 || true
           echo "--- sma-email-worker logs ---"
           pm2 logs sma-email-worker --nostream --lines 30 2>/dev/null | tail -35 || echo "(no worker)"
+          echo "--- SMTP auth test ---"
+          grep -E "^(SMTP_USER|SMTP_FROM|SMTP_FROM_EMAIL|SMTP_FROM_NAME)=" "$ENVF" 2>/dev/null || true
+          cd "$HOME/Documents/sma/backend" && .venv/bin/python -c "
+          import smtplib, ssl
+          from app.core.config import settings
+          print('host=%s port=%s user=%r ssl=%s' % (settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USER, settings.SMTP_USE_SSL))
+          try:
+              ctx = ssl.create_default_context()
+              with smtplib.SMTP_SSL(settings.SMTP_HOST, int(settings.SMTP_PORT or 465), context=ctx, timeout=20) as s:
+                  print('banner ok, auth methods:', s.esmtp_features.get('auth', '(none listed)'))
+                  s.login(settings.SMTP_USER or '', settings.SMTP_PASSWORD or '')
+                  print('SMTP LOGIN: OK')
+          except smtplib.SMTPAuthenticationError as e:
+              print('SMTP LOGIN: AUTH FAILED', e.smtp_code, e.smtp_error)
+          except Exception as e:
+              print('SMTP LOGIN: ERROR', type(e).__name__, str(e)[:200])
+          " 2>&1 | tail -6
           echo "--- recent outbox rows ---"
           cd "$HOME/Documents/sma/backend" && .venv/bin/python -c "
           from app.db.session import SessionLocal
