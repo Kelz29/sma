@@ -1,0 +1,28 @@
+name: Diagnose server
+
+# Manual, read-only diagnostics on the home server (self-hosted runner).
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Server diagnostics
+        run: |
+          echo "== ngrok tunnels =="
+          curl -s -m 5 http://127.0.0.1:4040/api/tunnels || echo "(agent unreachable)"
+          echo
+          echo "== ngrok processes =="
+          ps aux | grep -i '[n]grok' || echo "(none)"
+          echo "== pm2 =="
+          pm2 list 2>/dev/null || echo "(pm2 unavailable)"
+          echo "== backend health (127.0.0.1:8083) =="
+          curl -s -m 5 http://127.0.0.1:8083/health || echo "(backend unreachable)"
+          echo
+          echo "== listening ports 4040/8083 =="
+          ss -ltn | grep -E ':(4040|8083)' || echo "(neither listening)"
+          echo "== ngrok config (authtoken redacted) =="
+          sed 's/authtoken:.*/authtoken: REDACTED/' ~/.config/ngrok/ngrok.yml 2>/dev/null || echo "(no ngrok.yml)"
+          echo "== last frontend deploy log =="
+          tail -n 30 "$HOME/Documents/sma/logs/deploy-frontend.log" 2>/dev/null || echo "(no log)"
