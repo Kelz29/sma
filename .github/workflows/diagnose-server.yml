@@ -7,6 +7,8 @@ on:
 jobs:
   diagnose:
     runs-on: [self-hosted, linux, sma]
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Server diagnostics
         run: |
@@ -42,3 +44,15 @@ jobs:
             echo -n "$h: "
             curl -s -o /dev/null -m 8 -w "%{http_code} (%{time_total}s)\n" "https://$h/" || echo "UNREACHABLE"
           done
+          echo "== cloudflare zone bot/settings probe =="
+          if [[ -n "${CF_TOKEN:-}" ]]; then
+            API="https://api.cloudflare.com/client/v4"
+            ZID=$(curl -s -H "Authorization: Bearer $CF_TOKEN" "$API/zones?name=smartseen.co.za" | python3 -c "import sys,json; r=json.load(sys.stdin).get('result') or []; print(r[0]['id'] if r else '')" 2>/dev/null || true)
+            echo "zone id: ${ZID:0:8}..."
+            for ep in "settings/security_level" "settings/browser_check" "settings/challenge_ttl" "bot_management"; do
+              echo "--- $ep ---"
+              curl -s -m 10 -H "Authorization: Bearer $CF_TOKEN" "$API/zones/$ZID/$ep" | head -c 400; echo
+            done
+          else
+            echo "(no token)"
+          fi
