@@ -32,5 +32,8 @@ jobs:
           echo "== arch =="
           uname -m
           echo "== cf-login logs =="
-          pm2 describe cf-login 2>/dev/null | head -25 || echo "(no cf-login process)"
-          tail -n 25 "$HOME/.pm2/logs/cf-login-error.log" "$HOME/.pm2/logs/cf-login-out.log" 2>/dev/null || echo "(no cf-login logs)"
+          echo "--- error log ---"
+          tail -n 40 "$HOME/.pm2/logs/cf-login-error.log" 2>/dev/null || echo "(none)"
+          echo "--- out log ---"
+          tail -n 40 "$HOME/.pm2/logs/cf-login-out.log" 2>/dev/null || echo "(none)"
+          ls -la "$HOME/.cloudflared/" 2>/dev/null || echo "(no .cloudflared dir)"
