@@ -1,0 +1,94 @@
+name: Setup API tunnel (2/2 tunnel + deploy)
+
+# Waits for the Cloudflare cert from step 1/2, then:
+#   cloudflared tunnel 'sma-api' -> http://localhost:8083
+#   DNS: api.smartseen.co.za (overrides the wildcard record for this name)
+#   runs under pm2 (sma-cloudflared, saved), records stable-api-url.txt,
+#   and redeploys the frontend baked with https://api.smartseen.co.za/api/v1.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Create tunnel, DNS, service, deploy frontend
+        run: |
+          set -euo pipefail
+          CF="$HOME/.cloudflared"
+          mkdir -p "$CF"
+
+          echo "== wait for cert.pem (authorize in browser; up to 30 min) =="
+          for i in $(seq 1 120); do
+            [[ -f "$CF/cert.pem" ]] && break
+            sleep 15
+          done
+          if [[ ! -f "$CF/cert.pem" ]]; then
+            echo "ERROR: cert.pem not found — complete the 1/2 login authorization first" >&2
+            exit 1
+          fi
+          pm2 delete cf-login >/dev/null 2>&1 || true
+          echo "cert.pem present"
+
+          echo "== create tunnel sma-api (idempotent) =="
+          if ! cloudflared tunnel list 2>/dev/null | grep -q "sma-api"; then
+            cloudflared tunnel create sma-api
+          fi
+          UUID=$(basename "$(ls "$CF"/*.json | head -n1)" .json)
+          echo "tunnel UUID: $UUID"
+
+          echo "== write config.yml =="
+          {
+            echo "tunnel: $UUID"
+            echo "credentials-file: $CF/$UUID.json"
+            echo "ingress:"
+            echo "  - hostname: api.smartseen.co.za"
+            echo "    service: http://localhost:8083"
+            echo "  - service: http_status:404"
+          } > "$CF/config.yml"
+          cat "$CF/config.yml"
+
+          echo "== route DNS api.smartseen.co.za =="
+          cloudflared tunnel route dns sma-api api.smartseen.co.za || true
+
+          echo "== run under pm2 =="
+          pm2 delete sma-cloudflared >/dev/null 2>&1 || true
+          pm2 start /usr/local/bin/cloudflared --name sma-cloudflared -- tunnel --config "$CF/config.yml" run sma-api
+          pm2 save
+
+          echo "== wait for https://api.smartseen.co.za/health =="
+          OK=""
+          for i in $(seq 1 30); do
+            if curl -fsS -m 10 https://api.smartseen.co.za/health; then OK=1; break; fi
+            sleep 10
+          done
+          echo
+          if [[ -z "$OK" ]]; then
+            echo "ERROR: api.smartseen.co.za/health not reachable" >&2
+            pm2 logs sma-cloudflared --nostream --lines 40 || true
+            exit 1
+          fi
+
+          echo "== preflight from app origin =="
+          curl -si -m 15 -X OPTIONS https://api.smartseen.co.za/api/v1/auth/login \
+            -H "Origin: https://app.smartseen.co.za" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,authorization,x-tenant-id" | head -12
+
+          echo "== record stable API URL + deploy frontend =="
+          ROOT="$HOME/Documents/sma"
+          REPO="$ROOT/repo"
+          echo "https://api.smartseen.co.za/api/v1" > "$ROOT/stable-api-url.txt"
+          if [[ ! -d "$REPO/.git" ]]; then
+            git clone --branch main https://github.com/Kelz29/sma.git "$REPO"
+          fi
+          git -C "$REPO" fetch origin main
+          git -C "$REPO" checkout main
+          git -C "$REPO" reset --hard origin/main
+          install -m 755 "$REPO/deploy/deploy-frontend.sh" "$ROOT/deploy-frontend.sh"
+          SMA_API_URL="https://api.smartseen.co.za/api/v1" "$ROOT/deploy-frontend.sh"
+          echo "== setup complete =="

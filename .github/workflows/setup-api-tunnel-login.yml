@@ -1,0 +1,26 @@
+name: Setup API tunnel (1/2 login)
+
+# Starts `cloudflared tunnel login` under pm2 on the home server and prints the
+# one-time Cloudflare authorization URL into this job's log (readable only via
+# the authenticated Actions API — the repo is public, so never put it in an
+# issue/PR/file). Open the URL, sign in to Cloudflare, authorize the
+# smartseen.co.za zone, then run "Setup API tunnel (2/2)".
+on:
+  workflow_dispatch:
+
+jobs:
+  login:
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Start cloudflared login under pm2
+        run: |
+          if [[ -f "$HOME/.cloudflared/cert.pem" ]]; then
+            echo "cert.pem already exists — login not needed"
+            exit 0
+          fi
+          pm2 delete cf-login >/dev/null 2>&1 || true
+          pm2 start /usr/local/bin/cloudflared --name cf-login -- tunnel login
+          sleep 12
+          echo "== cloudflared login output =="
+          pm2 logs cf-login --nostream --lines 60 2>/dev/null || true
+          cat "$HOME/.pm2/logs/cf-login-out.log" "$HOME/.pm2/logs/cf-login-error.log" 2>/dev/null || true

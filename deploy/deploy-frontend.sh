@@ -53,6 +53,11 @@ fi
 # error page has no CORS headers, so login fails in the browser as a "CORS error".
 if [[ -n "${SMA_API_URL:-}" ]]; then
   API="${SMA_API_URL%/}"
+elif [[ -s "$ROOT/stable-api-url.txt" ]]; then
+  # Stable API origin (e.g. Cloudflare Tunnel: https://api.smartseen.co.za/api/v1),
+  # written once by the tunnel setup. Preferred over ephemeral ngrok URLs.
+  API="$(tr -d '[:space:]' <"$ROOT/stable-api-url.txt")"
+  API="${API%/}"
 else
   if [[ ! -x "$ROOT/start-ngrok-sma-tunnel.sh" ]]; then
     echo "Missing $ROOT/start-ngrok-sma-tunnel.sh" >&2
