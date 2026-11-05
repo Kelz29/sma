@@ -60,10 +60,17 @@ jobs:
           fi
 
           echo "== push tunnel ingress config =="
-          curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json' \
-            "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/configurations" \
-            -d '{"config":{"ingress":[{"hostname":"api.smartseen.co.za","service":"http://localhost:8083"},{"service":"http_status:404"}]}}' \
-            >/dev/null
+          INGRESS='{"config":{"ingress":[{"hostname":"api.smartseen.co.za","service":"http://localhost:8083"},{"service":"http_status:404"}]}}'
+          RESP=$(curl -sS -X PUT -H "$AUTH" -H 'Content-Type: application/json' \
+            "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/configurations" -d "$INGRESS")
+          echo "$RESP" | head -c 500; echo
+          if ! echo "$RESP" | grep -q '"success":true'; then
+            echo "-- retrying via cfd_tunnel path --"
+            RESP=$(curl -sS -X PUT -H "$AUTH" -H 'Content-Type: application/json' \
+              "$API/accounts/$ACCT_ID/cfd_tunnel/$TUN_ID/configurations" -d "$INGRESS")
+            echo "$RESP" | head -c 500; echo
+            echo "$RESP" | grep -q '"success":true' || { echo "ERROR: ingress config failed" >&2; exit 1; }
+          fi
           echo "ingress set"
 
           echo "== DNS CNAME api.smartseen.co.za -> $TUN_ID.cfargotunnel.com =="
