@@ -85,8 +85,12 @@ jobs:
           echo "DNS set"
 
           echo "== fetch tunnel token to server file (600) =="
-          TUN_TOKEN=$(curl -fsS -H "$AUTH" "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/token" \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+          TUN_TOKEN=$(curl -sS -H "$AUTH" "$API/accounts/$ACCT_ID/cfd_tunnel/$TUN_ID/token" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])" 2>/dev/null || true)
+          if [[ -z "$TUN_TOKEN" ]]; then
+            TUN_TOKEN=$(curl -fsS -H "$AUTH" "$API/accounts/$ACCT_ID/tunnels/$TUN_ID/token" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+          fi
           echo "::add-mask::$TUN_TOKEN"
           umask 077
           printf '%s' "$TUN_TOKEN" > "$CF/sma-api.token"
