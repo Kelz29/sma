@@ -1,0 +1,58 @@
+name: Fix email delivery
+
+# Restarts sma-email-worker (reload .env SMTP creds), reprocesses stuck
+# pending/failed outbox rows, and sends one fresh test welcome email.
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: [self-hosted, linux, sma]
+    steps:
+      - name: Restart worker, drain stuck outbox, test send
+        run: |
+          set -euo pipefail
+          APP="$HOME/Documents/sma/backend"
+          echo "== restart sma-email-worker (reload .env) =="
+          pm2 restart sma-email-worker --update-env
+          sleep 3
+          pm2 describe sma-email-worker | grep -E "status|uptime" || true
+
+          echo "== reprocess stuck rows + fresh test (fresh process, current .env) =="
+          cd "$APP"
+          .venv/bin/python - <<'PY'
+          from app.db.session import SessionLocal
+          from app.db.models.email_outbox import EmailOutbox
+          from app.workers.email_tasks import process_email_job
+          from app.utils.email_queue import enqueue_email
+
+          db = SessionLocal()
+          stuck = db.query(EmailOutbox).filter(EmailOutbox.status.in_(("pending", "failed"))).all()
+          print("stuck rows:", [(r.id, r.kind, r.to_email, r.status, r.attempts) for r in stuck])
+          ids = [r.id for r in stuck]
+          db.close()
+          for jid in ids:
+              try:
+                  print("process", jid, "->", process_email_job(jid))
+              except Exception as e:
+                  print("process", jid, "RAISED", type(e).__name__, str(e)[:200])
+
+          # Fresh end-to-end test to the dev inbox used by rows 2/3.
+          import time
+          db = SessionLocal()
+          job = enqueue_email(
+              db,
+              kind="welcome_verify",
+              to_email="makamanekj+pty@gmail.com",
+              payload={"full_name": "Email Test", "verify_url": "https://app.smartseen.co.za/verify-email?token=test-diagnostic"},
+              idempotency_key=f"diagnostic:{int(time.time())}",
+          )
+          print("test enqueue ->", job.id if job else None, job.status if job else None)
+          db.close()
+
+          db = SessionLocal()
+          rows = db.query(EmailOutbox).order_by(EmailOutbox.id.desc()).limit(8).all()
+          for r in rows:
+              print(r.id, r.kind, r.to_email, r.status, "attempts=" + str(r.attempts), "err=" + (r.last_error or "")[:150])
+          db.close()
+          PY
