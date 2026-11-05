@@ -16,9 +16,10 @@ jobs:
       - name: Ensure sma tunnel, then deploy frontend
         run: |
           echo "== create sma tunnel (error body shown) =="
+          # Name "sma" is reserved by ngrok.yml on this agent (error 102); use sma-api.
           curl -s -m 10 -X POST http://127.0.0.1:4040/api/tunnels \
             -H 'Content-Type: application/json' \
-            -d '{"name":"sma","addr":"http://localhost:8083","proto":"http"}' || true
+            -d '{"name":"sma-api","addr":"http://localhost:8083","proto":"http"}' || true
           echo
           echo "== tunnels now =="
           curl -s -m 5 http://127.0.0.1:4040/api/tunnels
@@ -50,4 +51,5 @@ jobs:
           git -C "$REPO" checkout main
           git -C "$REPO" reset --hard origin/main
           install -m 755 "$REPO/deploy/deploy-frontend.sh" "$ROOT/deploy-frontend.sh"
+          install -m 755 "$REPO/deploy/start-ngrok-sma-tunnel.sh" "$ROOT/start-ngrok-sma-tunnel.sh"
           "$ROOT/deploy-frontend.sh"

@@ -25,9 +25,12 @@ for t in json.load(sys.stdin).get('tunnels', []):
 
 URL=$(get_sma_url || true)
 if [[ -z "${URL}" ]]; then
+  # Name must NOT be "sma": that name is defined in ~/.config/ngrok/ngrok.yml, and the
+  # agent rejects API tunnel creation with error 102 ("tunnel sma already exists") for
+  # config-defined names. "sma-api" is matched by get_sma_url via the :8083 addr.
   curl -fsS -X POST http://127.0.0.1:4040/api/tunnels \
     -H 'Content-Type: application/json' \
-    -d '{"name":"sma","addr":"http://localhost:8083","proto":"http"}' \
+    -d '{"name":"sma-api","addr":"http://localhost:8083","proto":"http"}' \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('public_url',''))" >/dev/null || true
   sleep 1
   URL=$(get_sma_url || true)
